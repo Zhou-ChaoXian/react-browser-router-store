@@ -1,0 +1,46 @@
+{
+  "name": "@rbr/react-browser-router",
+  "version": "1.0.0",
+  "description": "简单的react路由工具",
+  "main": "./dist/index.js",
+  "module": "./dist/es/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "start": "rollup -c"
+  },
+  "keywords": [
+    "react",
+    "react-router",
+    "redux",
+    "reducer",
+    "immer",
+    "react-browser-router"
+  ],
+  "author": {
+    "name": "Zhou-ChaoXian",
+    "email": "2542606900@qq.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zhou-ChaoXian/react-browser-router.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "glob": "^10.3.10",
+    "immer": "^10.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.18.0",
+    "rollup": "^4.7.0"
+  },
+  "peerDependencies": {
+    "immer": "^10.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.18.0"
+  }
+}
