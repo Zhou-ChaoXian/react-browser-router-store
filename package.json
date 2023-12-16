@@ -1,5 +1,5 @@
 {
-  "name": "@rbr/react-browser-router",
+  "name": "react-browser-router-store",
   "version": "1.0.0",
   "description": "简单的react路由工具",
   "main": "./dist/index.js",
@@ -12,9 +12,9 @@
     "react",
     "react-router",
     "redux",
-    "reducer",
+    "reducers",
     "immer",
-    "react-browser-router"
+    "react-browser-router-store"
   ],
   "author": {
     "name": "Zhou-ChaoXian",
@@ -22,11 +22,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Zhou-ChaoXian/react-browser-router.git"
+    "url": "https://github.com/Zhou-ChaoXian/react-browser-router-store.git"
   },
   "license": "MIT",
   "devDependencies": {
-    "@rollup/plugin-babel": "^6.0.4",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",

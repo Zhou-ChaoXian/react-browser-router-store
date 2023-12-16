@@ -1,11 +1,11 @@
-# @rbr/react-browser-router
+# react-browser-router-store
 
 ## 简介
 
 > 封装路由（`react-router-dom`）和仓库（`redux`）  
 > 路由：对 `react-router-dom v6`（数据路由） 进行增强，不改变原始的用法（只加功能）  
 > 仓库：重新实现 `redux` 思想，并将功能添加进路由  
-> <font style="color: lightpink; font-size: 24px;">***仓库中实现 hooks 思想***</font>
+> ***仓库中实现 hooks 思想***
 
 
 > 增强的功能如下：
@@ -17,13 +17,12 @@
 5. [增强（`enhancer`，对路由进行布局增强，每次切换路由主动调用）](#增强)
 6. [包装（`wrapper`，用组件对路由进行包装）](#包装)
 7. [错误（`guardError`，在进入下一个路由前发生错误，进行处理）](#错误)
-8. [<font style="color: green">**仓库（`store`，路由仓库，每一个路由都可以拥有一个仓库）**</font>](#仓库)
+8. [**仓库（`store`，路由仓库，每一个路由都可以拥有一个仓库）**](#仓库)
 9. [导航守卫（`beforeEach  afterEach`，在路由切换前进行调用）](#导航守卫)
 10. [动态路由（`addRoutes`，添加路由）](#动态路由)
 11. [优化](#优化)
 
-> 功能 <font style="color: green">**1 - 8**</font> 实现方式：在路由对象中加了 <font style="color: green">**meta**</font>
-> 属性，他们都是 <font style="color: green">**symbol**</font>
+> 功能 **1 - 8** 实现方式：在路由对象中加了 `meta` 属性，他们都是 `symbol`
 
 ```javascript
 const router = createBrowserRouter([
@@ -46,11 +45,11 @@ const router = createBrowserRouter([
 
 ## 教程
 
-> 没有教程，一起实现一个简单的  <font style="color: green">**React**</font> 项目即可
+> 没有教程，一起实现一个简单的 **React** 项目即可
 
 ---
 
-<font style="color: pink; font-size: 24px">***学的愉快，学的开心 ~***</font>
+***学的愉快，学的开心 ~***
 
 ___
 
@@ -126,7 +125,7 @@ export default function App() {
 ```javascript
 // 修改后
 import {Link} from "react-router-dom";
-import {createBrowserRouter} from "@rbr/react-browser-router";
+import {createBrowserRouter} from "react-browser-router-store";
 
 export default function App() {
   return (
@@ -194,7 +193,7 @@ export default function App() {
 ```
 
 ```javascript
-import {createBrowserRouter, transition} from "@rbr/react-browser-router";
+import {createBrowserRouter, transition} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -225,7 +224,7 @@ const router = createBrowserRouter([
 > 实现思路：保存所有缓存的路由组件，动态设置组件根节点的内联 css display 样式
 
 ```javascript
-import {createBrowserRouter, transition, keepalive} from "@rbr/react-browser-router";
+import {createBrowserRouter, transition, keepalive} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -251,7 +250,7 @@ const router = createBrowserRouter([
 ```javascript
 // 有缓存效果时，组件有 激活 | 失活 两种状态
 // 有些行为在组件失活时应停止
-import {useActivated} from "@rbr/react-browser-router";
+import {useActivated} from "react-browser-router-store";
 
 function Foo() {
   const [count, setCount] = useState(0);
@@ -282,7 +281,7 @@ function Foo() {
 
 ### 别名
 
-> 一个路由可能存在多个路径，但是要保证<font style="color: lightgreen">***路径的匹配模式***</font>必须相同
+> 一个路由可能存在多个路径，但是要保证 ***路径的匹配模式*** 必须相同
 
 ```text
 /test/:id  ->  /testPro/:id    √  
@@ -290,7 +289,7 @@ function Foo() {
 ```
 
 ```javascript
-import {createBrowserRouter, transition, keepalive, alias} from "@rbr/react-browser-router";
+import {createBrowserRouter, transition, keepalive, alias} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -338,7 +337,7 @@ function Index() {
 > 由一个路径重定向到其他路径
 
 ```javascript
-import {createBrowserRouter, transition, keepalive, alias, redirect} from "@rbr/react-browser-router";
+import {createBrowserRouter, transition, keepalive, alias, redirect} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -394,7 +393,7 @@ function Index() {
 > 有的时候需要给组件添加一些功能，不改变组件原有的功能
 
 ```javascript
-import {createBrowserRouter, transition, keepalive, alias, redirect, enhancer} from "@rbr/react-browser-router";
+import {createBrowserRouter, transition, keepalive, alias, redirect, enhancer} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -452,7 +451,7 @@ import {
   redirect,
   enhancer,
   wrapper
-} from "@rbr/react-browser-router";
+} from "react-browser-router-store";
 
 const router = createBrowserRouter([
   {
@@ -588,7 +587,7 @@ function Login() {
 > 在跳转到下一个路由前，需要处理的逻辑可能报错，有些错误是故意抛出的，无需在意
 
 ```javascript
-import {guardError} from "@rbr/react-browser-router";
+import {guardError} from "react-browser-router-store";
 
 // 在 meta 中添加
 // [guardError]: (error) => {
@@ -598,15 +597,15 @@ import {guardError} from "@rbr/react-browser-router";
 
 ### 仓库
 
-> 这是一个重磅功能，实现了 `redux` 的思想，并添加了一些功能  
-> <font style="color: lightpink">**剧透：在仓库中实现 hooks 功能**</font>  
+> 重新实现了 `redux` 的思想，并添加了一些功能  
+> **并且在仓库中实现 hooks 功能**  
 > 称之为路由仓库，每个路由都可以拥有一个仓库，可以保留状态或不保留  
 > 有了仓库功能，缓存组件就会失效（因为可以提供更高级的缓存）
 
 ```javascript
 // 删除不必要的代码
 import {Link} from "react-router-dom";
-import {createBrowserRouter, store, createRouterStore} from "@rbr/react-browser-router";
+import {createBrowserRouter, store, createRouterStore} from "react-browser-router-store";
 
 // 创建一个仓库，仓库就是一个函数，仓库的状态初始值为 null
 // 函数会在路由进入前调用，返回值就是仓库的状态
@@ -723,7 +722,7 @@ function Index() {
 ```
 
 ```javascript
-import {createBrowserRouter, store, createRouterStore, makeEffect} from "@rbr/react-browser-router";
+import {createBrowserRouter, store, createRouterStore, makeEffect} from "react-browser-router-store";
 
 function makeCount() {
   const count = 0;
@@ -764,7 +763,7 @@ import {
   createRouterStore,
   makeEffect,
   createReducerHandle
-} from "@rbr/react-browser-router";
+} from "react-browser-router-store";
 
 function makeCount() {
   const count = 0;
@@ -880,7 +879,7 @@ const router = createBrowserRouter([
 ```
 
 ```javascript
-import {lazyWithStore} from "@rbr/react-browser-router";
+import {lazyWithStore} from "react-browser-router-store";
 
 // 路由懒加载
 const Index = lazyWithStore(() => import("./src/components/Index"));
@@ -968,6 +967,6 @@ export default createComponentWithStore(routerStoreCompose(Index, () => ({
 
 ---
 
-<font style="color: pink; font-size: 24px">***完结 ~***</font>
+***完结 ~***
 
 ___
