@@ -1,6 +1,5 @@
 import type {ReactNode, CSSProperties, ComponentType, ReactElement} from "react";
-import type {RouteObject, NavigateOptions, RouterProvider, NavigateFunction, Location, To} from "react-router-dom";
-import {ComponentWithStore} from "./core/lazy";
+import type {RouteObject, NavigateOptions, RouterProviderProps, NavigateFunction, Location, To} from "react-router-dom";
 
 export interface KeepaliveProps {
   uniqueKey: string;
@@ -48,13 +47,21 @@ export interface ShowListProps {
   delay: number;
   onStart: () => void;
   onEnd: () => void;
-  children: ReactNode | Resolve | (ReactNode | Resolve)[];
+  children: ReactNode | typeof Resolve | (ReactNode | typeof Resolve)[];
 }
 
 export interface ResolveProp {
   resolve: Promise<any> | any;
   error: ReactNode | ((error: any) => ReactNode);
   children: (value: any) => ReactNode;
+}
+
+export declare class TimeoutError extends Error {
+}
+
+export declare class ComponentWithStore {
+  readonly component: ComponentType;
+  readonly store: StoreInterface;
 }
 
 type deactivatedHandle = (() => void) | undefined;
@@ -67,11 +74,11 @@ export declare function useActivated(activatedHandle: () => deactivatedHandle): 
 
 export declare function Redirect(props: Partial<RedirectProps>): undefined;
 
-export declare function Show(props: ShowProps): ReactElement;
+export declare function Show(props: Partial<ShowProps>): ReactElement;
 
-export declare function ShowList(props: ShowListProps): ReactElement;
+export declare function ShowList(props: Partial<ShowListProps>): ReactElement;
 
-export declare function Resolve(props: ResolveProp): undefined;
+export declare function Resolve(props: Partial<ResolveProp>): undefined;
 
 export declare const enhancer: unique symbol;
 export declare const wrapper: unique symbol;
@@ -126,7 +133,7 @@ export type ReducerDispatch = (action: ReducerAction) => any;
 export type ComposeDispatch = (action: ComposeAction) => any;
 
 export interface Router {
-  RouterProvider: RouterProvider;
+  RouterProvider: ComponentType<Omit<RouterProviderProps, "router"> & { router: Router }>;
   useRoutes: Route[];
   useGlobalOptions: GlobalOptionsType;
   useRouteMeta: MetaInterface;
@@ -140,7 +147,7 @@ export interface Router {
   afterEach: (handle: AfterEachHandle) => DeleteAfterEachHandle;
   getRoutes: Route[];
   addRoutes: (newRoutes: Route[]) => Promise<NavigateFunction>;
-  hasRoute: (locationArg: Partial<Location> | string, basename: string = "/") => boolean;
+  hasRoute: (locationArg: Partial<Location> | string, basename?: string) => boolean;
 }
 
 type Options = { basename?: string };
@@ -176,7 +183,7 @@ type DetailType = { memo: ObjectAny } & ObjectAny;
 type MemoValueSetType = (setContainer: { detail: DetailType, options: ObjectAny, value: any }) => void;
 type CallbackValueSetType = (setContainer: { detail: DetailType, options: ObjectAny, value: () => any }) => void;
 
-export declare function makeMemo(depsHandle: DepsHandle, computeHandle: MemoHandleType, set: MemoValueSetType, isFactory: boolean = true): void;
+export declare function makeMemo(depsHandle: DepsHandle, computeHandle: MemoHandleType, set: MemoValueSetType, isFactory?: boolean): void;
 
 export declare function makeCallback(depsHandle: DepsHandle, functor: MemoHandleType, set: CallbackValueSetType): void;
 
@@ -198,7 +205,7 @@ type ActionType = ObjectAny & {
   type: keyof ReducersType;
 };
 type ReducerType<S> = ((state: S, action?: ActionType, detail?: ObjectAny, options?: ObjectAny) => S | undefined);
-type ReducersType<S> = {
+type ReducersType<S = ObjectAny> = {
   [key: string | symbol]: ReducerType<S>;
 };
 type ActionsType = {
@@ -213,7 +220,7 @@ type RequestArg<S> = {
   options: ObjectAny;
 };
 type Request<S> = (data: RequestArg<S>) => S
-type SubscribeHandleType<S> = (data: { state: S; detail?: ObjectAny; options?: ObjectAny }) => void;
+type SubscribeHandleType<S = ObjectAny> = (data: { state: S; detail?: ObjectAny; options?: ObjectAny }) => void;
 type DeleteSubscribeHandle = () => SubscribeHandleType;
 
 export type StoreInterface<S = ObjectAny | null> = ObjectAny & {

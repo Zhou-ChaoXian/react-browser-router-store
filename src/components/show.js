@@ -110,10 +110,10 @@ function ShowList({loading = false, timeout = 0, delay = 300, onStart, onEnd, ch
     })).then(v => sleep(delay, v));
   }
   let resolve = tasks;
-  if (flag) {
+  if (flag && hasPromise) {
     const timeoutTask = sleep(timeout + delay, timeoutArrayValue)
       .then(v => v.map(item => item === Nop ? setRejectReason(new TimeoutError()) : item));
-    resolve = Promise.race([hasPromise ? tasks : sleep(delay, tasks), timeoutTask]);
+    resolve = Promise.race([tasks, timeoutTask]);
   }
   const handle = values => {
     const result = values.map(({status, value, reason}, index) => {

@@ -1,12 +1,13 @@
 {
   "name": "react-browser-router-store",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "简单的react路由工具",
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/es/index.mjs",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "start": "rollup -c"
+    "start": "node tests/utils.js && rollup -c"
   },
   "keywords": [
     "react",
