@@ -21,6 +21,7 @@
 9. [导航守卫（`beforeEach  afterEach`，在路由切换前进行调用）](#导航守卫)
 10. [动态路由（`addRoutes`，添加路由）](#动态路由)
 11. [优化](#优化)
+12. [组件（管理 `promise` 的功能性组件）](#组件)
 
 > 功能 **1 - 8** 实现方式：在路由对象中加了 `meta` 属性，他们都是 `symbol`
 
@@ -813,7 +814,7 @@ import {
   createRouterStore,
   useRouter,
   createComponentWithStore
-} from "./index";
+} from "react-browser-router-store";
 
 function makeCount() {
   const count = 0;
@@ -863,7 +864,7 @@ function Index() {
 export default createComponentWithStore(Index, indexStore);
 
 // App.jsx
-import Index from "./src/components/Index";
+import Index from "./components/Index";
 
 const router = createBrowserRouter([
   {
@@ -882,7 +883,7 @@ const router = createBrowserRouter([
 import {lazyWithStore} from "react-browser-router-store";
 
 // 路由懒加载
-const Index = lazyWithStore(() => import("./src/components/Index"));
+const Index = lazyWithStore(() => import("./components/Index"));
 ```
 
 > 在仓库中也可以实现 hooks 思想
@@ -892,7 +893,7 @@ const Index = lazyWithStore(() => import("./src/components/Index"));
 > 在组件内使用路由相关的 hooks 时，切换路由会多渲染一次
 
 ```javascript
-import {routerStoreCompose, useRouterStore} from "./index";
+import {routerStoreCompose, useRouterStore} from "react-browser-router-store";
 
 function Index() {
   // useRouterStore获取仓库
@@ -935,7 +936,7 @@ import {
   routerStoreCompose,
   useRouterStore,
   useRouterHooks,
-} from "./index";
+} from "react-browser-router-store";
 
 function Index() {
   // 获取仓库
@@ -963,6 +964,73 @@ function Index() {
 export default createComponentWithStore(routerStoreCompose(Index, () => ({
   location: useLocation(),
 })), indexStore);
+```
+
+### 组件
+
+> `Show`  管理一个 `promise`  
+> `ShowList`  `Resolve`  管理多个 `promise`
+
+> 思考：一般组件从外部接口获取数据，我们的写法是...
+> 1. 先创建一个状态
+> 2. 组件挂载后在副作用中请求接口，设置状态
+
+> 问题
+> 1. 组件多次渲染
+> 2. 数据瀑布
+
+> `react` 有一个实验性的hook  `use`，我们对这个功能简单封装了一下
+
+```javascript
+import {useState} from "react";
+import {Show} from "react-browser-router-store";
+
+function Foo() {
+  // 接口请求数据
+  // setData 可以传 promise 或 值
+  const [data, setData] = useState(() => Promise.resolve("hello world"));
+  return (
+    <div>
+      {/* resolve 可以是 promise 或 值 */}
+      {/* loading 在 promise 完成前显示 */}
+      <Show resolve={data} loading={<h1>loading...</h1>}>
+        {/* value 是 promise 的结果 */}
+        {value => <h1>{value}</h1>}
+      </Show>
+    </div>
+  );
+}
+
+// 请求接口数据现在就像组件中的一个普通状态
+```
+
+```javascript
+import {useState} from "react";
+import {ShowList, Resolve} from "react-browser-router-store";
+
+async function sleep(delay, value) {
+  await new Promise(resolve => setTimeout(resolve, delay));
+  return value;
+}
+
+// 有的时候，组件可能依赖多个 外部接口数据
+// 等所有数据准备好了，统一显示
+function Foo() {
+  const [data1, setData1] = useState(() => sleep(1000, "hello world"));
+  const [data2, setData2] = useState(() => sleep(2000, "hi"));
+  return (
+    <div>
+      <ShowList loading={<h1>loading...</h1>}>
+        <Resolve resolve={data1}>
+          {value => <h1>{value}</h1>}
+        </Resolve>
+        <Resolve resolve={data2}>
+          {value => <h1>{value}</h1>}
+        </Resolve>
+      </ShowList>
+    </div>
+  );
+}
 ```
 
 ---
