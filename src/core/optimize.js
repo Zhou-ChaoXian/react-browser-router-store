@@ -11,7 +11,7 @@ import {
 import {useRouter} from "./browserRouter.js";
 
 export {
-  routerNativeHooks,
+  routerNative,
   routerStore,
   routerStoreState,
   routerStoreReducer,
@@ -32,7 +32,7 @@ function useRouterHooks() {
   return useContext(Context).routerHooks;
 }
 
-function routerNativeHooks(component, useRouterNativeHooksHandle = defaultUseRouterNativeHooksHandle) {
+function routerNative(component, useRouterNativeHooksHandle = defaultUseRouterNativeHooksHandle) {
   return function RouterNativeHooks() {
     const routerHooks = useRouterNativeHooksHandle();
     return useState(() => generateElement(component, undefined, routerHooks))[0];

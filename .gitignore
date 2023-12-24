@@ -4,4 +4,4 @@ node_modules
 package-lock.json
 dist
 tests
-rollup.config.js
+rollup.config.mjs

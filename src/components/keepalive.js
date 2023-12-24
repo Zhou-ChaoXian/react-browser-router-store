@@ -39,10 +39,10 @@ export {
 const Context = createContext(false);
 
 /**
- * @param uniqueKey {string | any}
+ * @param uniqueKey {string | undefined}
  * @param max {number}
- * @param include {(key: string | any) => boolean}
- * @param exclude {(key: string | any) => boolean}
+ * @param include {(key: string | undefined) => boolean}
+ * @param exclude {(key: string | undefined) => boolean}
  * @param style {Omit<React.CSSProperties, "display">}
  * @param children {React.ReactNode}
  * @return {React.ReactElement[]}

@@ -16,7 +16,7 @@ import {
   matchRoutes,
 } from "react-router-dom";
 import {produce} from "immer";
-import {Context, RouteContext, defaultFunction, judgeUseKeepalive, isUseKeepAlive} from "./context.js";
+import {Context, RouteContext, defaultFunction} from "./context.js";
 import {handleRoutes} from "./handleRoutes.js";
 import {getEffects} from "../store";
 
@@ -50,20 +50,13 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
   if (typeof enhancer === "function") {
     return enhancer(baseCreateBrowserRouter)(routes, options, globalOptions);
   }
-  wrapperHandleRoutes(routes);
+  handleRoutes(routes, globalOptions);
   const {factory} = routerFactory;
   const beforeHandles = [];
   const afterHandles = [];
   let baseRoutes = routes;
   const navigateGuard = {current: {pathname: "", active: false}, subscribes: []};
   let router = factory(baseRoutes, options);
-
-  function wrapperHandleRoutes(routes) {
-    judgeUseKeepalive.flag = true;
-    handleRoutes(routes, globalOptions);
-    Object.defineProperty(globalOptions, isUseKeepAlive, {value: judgeUseKeepalive.flag, writable: true});
-    judgeUseKeepalive.flag = true;
-  }
 
   function useRoutes() {
     return baseRoutes;
@@ -136,9 +129,7 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
         return action;
       }
     }, []);
-    const wrapperStore = {state, detail, options};
-    useRouterStoreStatePro__effect(store, wrapperStore, dispatch);
-    return [wrapperStore, dispatch];
+    return [{state, detail, options}, dispatch];
   }
 
   function useRouterStoreStatePro__effect(store, wrapperStore, dispatch) {
@@ -171,7 +162,7 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
     }
   }
 
-  function useRouterStoreReducer(reducersOrFactory) {
+  function useRouterStoreReducer(reducersOrFactory = {}) {
     const store = useRouterStore();
     const [reducers] = useState(() => typeof reducersOrFactory === "function" ?
       reducersOrFactory(store) :
@@ -182,7 +173,9 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
 
   function useRouterStoreCompose() {
     const store = useRouterStore();
-    return useRouterStoreStatePro__base(store, action => action?.type);
+    const [wrapperStore, dispatch] = useRouterStoreStatePro__base(store, action => action?.type);
+    useRouterStoreStatePro__effect(store, wrapperStore, dispatch);
+    return [wrapperStore, dispatch];
   }
 
   let listener = null;
@@ -243,9 +236,9 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
     },
     addRoutes: (newRoutes = baseRoutes) => {
       return new Promise(resolve => {
-        if (newRoutes === baseRoutes) return;
+        if (newRoutes === baseRoutes) return resolve();
         baseRoutes = newRoutes;
-        wrapperHandleRoutes(baseRoutes);
+        handleRoutes(baseRoutes, globalOptions);
         router = factory(baseRoutes, options);
         listener?.();
         addRoutesResolve = resolve;

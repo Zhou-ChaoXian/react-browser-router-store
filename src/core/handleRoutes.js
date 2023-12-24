@@ -1,10 +1,10 @@
 "use strict";
 
 import {createElement as h, useContext, useLayoutEffect, useRef, useState} from "react";
-import {useLocation, useNavigate} from "react-router-dom";
-import {Context, RouteContext, defaultFunction, judgeUseKeepalive, isUseKeepAlive} from "./context.js";
+import {useLocation, useNavigate, generatePath} from "react-router-dom";
+import {Context, RouteContext, defaultFunction} from "./context.js";
 import {ComponentWithStore, isLazyComponentWithStore, StoreState} from "./lazy.js";
-import {Transition, Keepalive, Redirect, noCache} from "../components";
+import {Transition, Keepalive, Redirect} from "../components";
 import {compose, getRequestAfterHandles, getRequestBeforeHandles, getRequestErrorHandles} from "../store";
 
 export {
@@ -32,6 +32,7 @@ const redirect = Symbol("redirect");
 const alias = Symbol("alias");
 const enhancerFactory = Symbol();
 const max = Symbol("max");
+const originPath = Symbol("originPath");
 
 function handleRoutes(routes, globalOptions) {
   const extraRoutesHandles = [];
@@ -41,9 +42,6 @@ function handleRoutes(routes, globalOptions) {
       if (meta[redirect]) {
         handleRouteMetaRedirect(item);
       } else {
-        if (judgeUseKeepalive.flag && meta[store]) {
-          judgeUseKeepalive.flag = false;
-        }
         const wrapperList = meta[wrapper] ?? globalOptions[wrapper] ?? [];
         let element;
         if (item.element) {
@@ -83,12 +81,10 @@ function handleRouteComponent(item) {
   let element;
   const {component} = item;
   if (component instanceof ComponentWithStore) {
-    judgeUseKeepalive.flag = false;
     element = h(component.component);
     item.meta ??= {};
     item.meta[store] = component.store;
   } else if (isLazyComponentWithStore(component)) {
-    judgeUseKeepalive.flag = false;
     item.meta ??= {};
     const storeState =
       Reflect.get(component, "storeState") ??
@@ -126,7 +122,7 @@ function handleRouteMetaAlias(route, extraRoutesHandles) {
   }
   if (aliasInfo.length === 0) return;
   extraRoutesHandles.push(() => aliasInfo.map(path => {
-    const newRoute = {...route, meta: {...route.meta}, path};
+    const newRoute = {...route, meta: {...route.meta, [originPath]: route.path}, path};
     delete newRoute.meta[alias];
     return newRoute;
   }));
@@ -168,7 +164,7 @@ function Route({route}) {
   const {handles: [before, after], router, globalOptions, handleNavigateGuard} = useContext(Context);
   const matches = router.state.matches;
   const match = matches[matches.findIndex(item => item.route.element.props.route === route)];
-  const {pathname} = match, {meta = {}} = match.route;
+  const {pathname, params} = match, {meta = {}} = match.route;
   if (!meta[enhancerFactory]) {
     meta[enhancerFactory] = compose(meta[enhancer] ?? globalOptions[enhancer] ?? []);
     match.route.meta = meta;
@@ -179,7 +175,6 @@ function Route({route}) {
   to.pathname === pathname && (to.meta ??= meta);
   const navigate = useNavigate();
   const resolveValue = useRef();
-  const [isUseKeepaliveFlag] = useState(() => globalOptions[isUseKeepAlive]);
   useLayoutEffect(() => {
     let flag = true;
     handleNavigateGuard(from.current.pathname, true);
@@ -229,12 +224,12 @@ function Route({route}) {
     }).then(([route, store]) => {
       if (!flag) throw new Cancel();
       const uniqueKey = pathname;
+      const __originPath = meta[originPath];
       const keepAliveProps = {
         ...(meta[keepalive] ?? globalOptions[keepalive] ?? {}),
         max: globalOptions[max],
-        uniqueKey
+        uniqueKey: __originPath === undefined ? uniqueKey : generatePath(__originPath, params)
       };
-      if (!isUseKeepaliveFlag) keepAliveProps.include = noCache;
       const nextElement = h(RouteContext.Provider, {value: {pathname, store, meta}}, h(
         Transition, {...(meta[transition] ?? globalOptions[transition] ?? {}), uniqueKey},
         h(Keepalive, keepAliveProps, meta[enhancerFactory](() => route)({to, from: from.current, pathname}))

@@ -2,10 +2,10 @@ import type {ReactNode, CSSProperties, ComponentType, ReactElement} from "react"
 import type {RouteObject, NavigateOptions, RouterProviderProps, NavigateFunction, Location, To} from "react-router-dom";
 
 export interface KeepaliveProps {
-  uniqueKey: string;
+  uniqueKey: string | undefined;
   max: number;
-  include: (key: string) => boolean;
-  exclude: (key: string) => boolean;
+  include: (key: string | undefined) => boolean;
+  exclude: (key: string | undefined) => boolean;
   style: Omit<CSSProperties, "display">;
   children: ReactNode;
 }
@@ -19,7 +19,7 @@ export interface RedirectProps {
 export interface TransitionProps {
   name: string;
   disabled: boolean;
-  uniqueKey: string | undefined;
+  uniqueKey: string | any;
   type: "transition" | "animation";
   className: string | undefined;
   style: CSSProperties;
@@ -35,10 +35,16 @@ export interface TransitionProps {
 export interface ShowProps {
   resolve: Promise<any> | any;
   loading: ReactNode;
-  error: ReactNode | ((error: any) => ReactNode);
+  error: ((error: any) => ReactNode) | ReactNode;
   onStart: () => void;
   onEnd: () => void;
   children: (value: any) => ReactNode;
+}
+
+export interface ShowOrderProps {
+  mode: "forward" | "backward" | "together" | undefined;
+  delay: number;
+  children: ReactNode | ReactElement<ShowProps> | (ReactNode | ReactElement<ShowProps>)[];
 }
 
 export interface ShowListProps {
@@ -47,12 +53,12 @@ export interface ShowListProps {
   delay: number;
   onStart: () => void;
   onEnd: () => void;
-  children: ReactNode | typeof Resolve | (ReactNode | typeof Resolve)[];
+  children: ReactNode | ReactElement<ResolveProp> | (ReactNode | ReactElement<ResolveProp>)[];
 }
 
 export interface ResolveProp {
   resolve: Promise<any> | any;
-  error: ReactNode | ((error: any) => ReactNode);
+  error: ((error: any) => ReactNode) | ReactNode;
   children: (value: any) => ReactNode;
 }
 
@@ -60,8 +66,8 @@ export declare class TimeoutError extends Error {
 }
 
 export declare class ComponentWithStore {
-  readonly component: ComponentType;
-  readonly store: StoreInterface;
+  component: ComponentType;
+  store: StoreInterface;
 }
 
 type deactivatedHandle = (() => void) | undefined;
@@ -72,9 +78,11 @@ export declare function Keepalive(props: Partial<KeepaliveProps>): ReactElement;
 
 export declare function useActivated(activatedHandle: () => deactivatedHandle): void;
 
-export declare function Redirect(props: Partial<RedirectProps>): undefined;
+export declare function Redirect(props: Partial<RedirectProps>): ReactNode;
 
 export declare function Show(props: Partial<ShowProps>): ReactElement;
+
+export declare function ShowOrder(props: Partial<ShowOrderProps>): ReactElement;
 
 export declare function ShowList(props: Partial<ShowListProps>): ReactElement;
 
@@ -104,12 +112,25 @@ interface BaseMetaInterface {
   [wrapper]: Wrapper[];
   [transition]: Partial<TransitionProps>;
   [keepalive]: Partial<KeepaliveProps>;
-  [redirect]: Partial<RedirectType>;
-  [alias]: AliasType;
   [guardError]: (error: any) => void;
 }
 
-export type MetaInterface = Partial<BaseMetaInterface> & { [store]?: StoreInterface } & ObjectAny;
+export type Action = ReducerAction | ComposeAction;
+export type ReducerAction = ObjectAny & { type: string | undefined };
+export type ComposeAction = ObjectAny & { type: SyncReducerHandle | ReducerHandle | undefined };
+export type SyncReducerHandle<S = ObjectAny> = (state: S, action?: Action, detail?: ObjectAny, options?: ObjectAny) => S | undefined;
+export type AsyncReducerHandle<S = ObjectAny> = (state: S, action?: Action, detail?: ObjectAny, options?: ObjectAny) => Action | undefined | Promise<Action | undefined>;
+
+declare class ReducerHandle {
+  reducerHandle: AsyncReducerHandle;
+  successAction?: (value: any) => Action;
+  failAction?: (error: any) => Action;
+}
+
+export type MetaInterface =
+  Partial<BaseMetaInterface>
+  & { [store]?: StoreInterface; [redirect]?: Partial<RedirectType>; [alias]?: AliasType; }
+  & ObjectAny;
 export type GlobalOptionsType = Partial<BaseMetaInterface> & { [start]?: ReactNode; [max]?: number } & ObjectAny;
 export type Route = RouteObject & {
   meta?: MetaInterface;
@@ -127,8 +148,6 @@ type DeleteBeforeEachHandle = () => BeforeEachHandle;
 type DeleteAfterEachHandle = () => AfterEachHandle;
 export type WrapperStore<S = ObjectAny> = { state: S; detail: ObjectAny; options: ObjectAny };
 export type SetStore<S = ObjectAny> = (state: S, detail?: ObjectAny, options?: ObjectAny) => S | undefined;
-export type ReducerAction = ObjectAny & { type: string | undefined };
-export type ComposeAction = ObjectAny & { type: Function | undefined };
 export type ReducerDispatch = (action: ReducerAction) => any;
 export type ComposeDispatch = (action: ComposeAction) => any;
 
@@ -140,13 +159,13 @@ export interface Router {
   useNavigateGuard: () => boolean;
   useRouterStore: () => StoreInterface;
   useRouterStoreState: () => [WrapperStore, SetStore];
-  useRouterStoreReducer: (reducers: ObjectAny) => [WrapperStore, ReducerDispatch];
+  useRouterStoreReducer: (reducers?: ObjectAny) => [WrapperStore, ReducerDispatch];
   useRouterStoreCompose: () => [WrapperStore, ComposeDispatch];
   globalOptions: GlobalOptionsType;
   beforeEach: (handle: BeforeEachHandle) => DeleteBeforeEachHandle;
   afterEach: (handle: AfterEachHandle) => DeleteAfterEachHandle;
   getRoutes: Route[];
-  addRoutes: (newRoutes: Route[]) => Promise<NavigateFunction>;
+  addRoutes: (newRoutes: Route[]) => Promise<NavigateFunction | undefined>;
   hasRoute: (locationArg: Partial<Location> | string, basename?: string) => boolean;
 }
 
@@ -158,9 +177,7 @@ export declare function createHashRouter(routes: Route[], options?: Options, glo
 
 export declare function useRouter(): Router;
 
-type Action = ReducerAction | ComposeAction;
-
-export declare function createReducerHandle<S = ObjectAny>(reducer: (state: S, action?: Action, detail?: ObjectAny, options?: ObjectAny) => Action | undefined): any;
+export declare function createReducerHandle<S = ObjectAny>(reducer: AsyncReducerHandle<S>): ReducerHandle;
 
 export type LazyFactoryType = () => Promise<{ default: ComponentType; [name: string]: any }>;
 
@@ -172,26 +189,23 @@ export declare function lazyWithStore(factory: LazyWithStoreFactoryType, name?: 
 
 export declare function createComponentWithStore(component: ComponentType, store: StoreInterface): ComponentWithStore;
 
-export type EffectHandleType = (newValue: any, oldValue: any) => (() => void) | undefined;
-type EffectType = (data: { state: ObjectAny; detail: ObjectAny; options: ObjectAny }, dispatch: ReducerDispatch | ComposeDispatch) => [any[], EffectHandleType];
+export type EffectHandleType = (newValue?: any, oldValue?: any) => (() => void) | undefined;
+type EffectType = (store: WrapperStore, dispatch?: ComposeDispatch) => [any[], EffectHandleType];
 
 export declare function makeEffect(effect: EffectType): void;
 
-type DepsHandle = (data: { state: ObjectAny }) => any[];
+type DepsHandle = (data: WrapperStore) => any[];
 type MemoHandleType = (newValue, oldValue) => any;
-type DetailType = { memo: ObjectAny } & ObjectAny;
-type MemoValueSetType = (setContainer: { detail: DetailType, options: ObjectAny, value: any }) => void;
-type CallbackValueSetType = (setContainer: { detail: DetailType, options: ObjectAny, value: () => any }) => void;
 
-export declare function makeMemo(depsHandle: DepsHandle, computeHandle: MemoHandleType, set: MemoValueSetType, isFactory?: boolean): void;
+export declare function makeMemo(depsHandle: DepsHandle, computeHandle: MemoHandleType, isFactory?: boolean): { value: any };
 
-export declare function makeCallback(depsHandle: DepsHandle, functor: MemoHandleType, set: CallbackValueSetType): void;
+export declare function makeCallback(depsHandle: DepsHandle, functor: MemoHandleType): { value: () => any };
 
-export declare function useRouterStore(): any;
+export declare function useRouterStore(): [WrapperStore, SetStore | ReducerDispatch | ComposeDispatch];
 
 export declare function useRouterHooks(): ObjectAny;
 
-export declare function routerNativeHooks(component: ComponentType, useRouterNativeHooksHandle?: () => ObjectAny): ComponentType;
+export declare function routerNative(component: ComponentType, useRouterNativeHooksHandle?: () => ObjectAny): ComponentType;
 
 export declare function routerStore(component: ComponentType, useRouterHooksHandle?: () => ObjectAny): ComponentType;
 
@@ -219,7 +233,7 @@ type RequestArg<S> = {
   detail: ObjectAny;
   options: ObjectAny;
 };
-type Request<S> = (data: RequestArg<S>) => S
+type Request<S> = (requestArg?: RequestArg<S>) => S
 type SubscribeHandleType<S = ObjectAny> = (data: { state: S; detail?: ObjectAny; options?: ObjectAny }) => void;
 type DeleteSubscribeHandle = () => SubscribeHandleType;
 

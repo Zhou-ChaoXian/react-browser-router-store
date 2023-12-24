@@ -50,7 +50,7 @@ const router = createBrowserRouter([
 
 ---
 
-***学的愉快，学的开心 ~***
+> ***学的愉快，学的开心 ~***
 
 ___
 
@@ -135,12 +135,11 @@ export default function App() {
 }
 ```
 
-> 修改很简单，只需 3 步
+> 修改很简单，只需 2 步
 > 1. 导入换一下
 > 2. RouterProvider 前面添加一个 router 即可
-> 3. 所有功能已具备
 
-> 功能正常
+> 功能正常，并且已具备额外功能
 
 ### 添加过渡效果
 
@@ -249,6 +248,18 @@ const router = createBrowserRouter([
 ```
 
 ```javascript
+// 最多缓存 10 个路由，最后访问的 10 个路由
+// 要改变数量，用 max
+// max > 0，缓存 max 个
+// max <= 0，全部缓存
+import {max} from "react-browser-router-store";
+
+const router = createBrowserRouter([], undefined, {
+  [max]: 0  // 全部缓存
+});
+```
+
+```javascript
 // 有缓存效果时，组件有 激活 | 失活 两种状态
 // 有些行为在组件失活时应停止
 import {useActivated} from "react-browser-router-store";
@@ -258,6 +269,7 @@ function Foo() {
   // 添加激活函数，组件挂载或激活时执行
   useActivated(() => {
     const id = setInterval(() => {
+      // 这里只能用函数设置值
       setCount(c => c + 1);
     }, 1000);
     // 返回失活函数，组件卸载或失活时执行
@@ -276,13 +288,15 @@ function Foo() {
 }
 ```
 
-> 快试一试效果，<kbd>f12</kbd>打开浏览器控制台，查看元素，看看切换路由后 dom 的情况。  
+> 快试一试效果， <kbd>f12</kbd> 打开浏览器控制台，查看元素，看看切换路由后 dom 的情况。  
 > 给组件添加状态并修改状态（`useState`），切换路由并查看状态是否保留  
 > 给 Foo 添加缓存效果
 
 ### 别名
 
-> 一个路由可能存在多个路径，但是要保证 ***路径的匹配模式*** 必须相同
+> 一个路由可能存在多个路径，但是要保证 ***路径的匹配模式*** 必须相同  
+> ***注意：子路由的路径，不能以 / 开头***  
+> ***因为子路由的路径必须包含父路由的路径，现在父路由有多个***
 
 ```text
 /test/:id  ->  /testPro/:id    √  
@@ -411,10 +425,10 @@ const router = createBrowserRouter([
       [enhancer]: [
         next => () => {
           return (
-            <div>
+            <>
               <h1>enhancer1</h1>
               {next()}
-            </div>
+            </>
           );
         }
       ],
@@ -469,10 +483,10 @@ const router = createBrowserRouter([
       [enhancer]: [
         next => () => {
           return (
-            <div>
+            <>
               <h1>enhancer1</h1>
               {next()}
-            </div>
+            </>
           );
         }
       ],
@@ -496,10 +510,10 @@ const router = createBrowserRouter([
 
 function IndexWrapper({children}) {
   return (
-    <div>
+    <>
       <h1>IndexWrapper</h1>
       {children}
-    </div>
+    </>
   );
 }
 ```
@@ -510,10 +524,10 @@ function IndexWrapper({children}) {
 
 function IndexWrapper({name, age, children}) {
   return (
-    <div>
+    <>
       <h1>IndexWrapper - {name} - {age}</h1>
       {children}
-    </div>
+    </>
   );
 }
 ```
@@ -596,12 +610,31 @@ import {guardError} from "react-browser-router-store";
 // }
 ```
 
+---
+
+> 全局设置 过渡、缓存、增强、包装、错误  
+> `createBrowserRouter` 函数第三个参数  
+> ***局部的设置会覆盖全局的设置***
+
+```javascript
+import {createBrowserRouter, transition, keepalive, enhancer, wrapper, guardError} from "react-browser-router-store";
+
+// 可以快速的设置所有路由的效果
+const router = createBrowserRouter([], undefined, {
+  [transition]: {},
+  [keepalive]: {},
+  [enhancer]: [],
+  [wrapper]: [],
+  [guardError]: () => {}
+});
+```
+---
+
 ### 仓库
 
 > 重新实现了 `redux` 的思想，并添加了一些功能  
 > **并且在仓库中实现 hooks 功能**  
-> 称之为路由仓库，每个路由都可以拥有一个仓库，可以保留状态或不保留  
-> 有了仓库功能，缓存组件就会失效（因为可以提供更高级的缓存）
+> 称之为路由仓库，每个路由都可以拥有一个仓库，可以保留状态或不保留
 
 ```javascript
 // 删除不必要的代码
@@ -664,6 +697,7 @@ const reducers = {
 function Index() {
   // 类似于 useReducer
   // dispatch是一个函数，传递 action，action 是一个对象，必须要有 type
+  // dispatch调用，会从 reducers 中选择 type，选中函数，然后执行
   const [{state}, dispatch] = router.useRouterStoreReducer(reducers);
   return (
     <div>
@@ -703,6 +737,8 @@ const indexStore = createRouterStore(async ({state}) => {
 
 function Index() {
   // 组合式
+  // dispatch是一个函数，传递 action，action 是一个对象，必须要有 type
+  // dispatch调用，type 是一个函数，直接执行这个函数
   const [{state}, dispatch] = router.useRouterStoreCompose();
   return (
     <div>
@@ -715,15 +751,25 @@ function Index() {
   );
 }
 
-// 反思：hooks 应该包括 3 部分
+// 反思：一个完整的 hook 应该包括 3 部分
 // 1. 数据
 // 2. 操作数据的行为
 // 3. 数据改变后的副作用
 // 现在缺少副作用
 ```
 
+> ***注意：副作用仅限于 `router.useRouterStoreCompose`***
+
+```text
+副作用包含三个函数，对应功能如下：
+
+1. makeEffect    ->  useEffect
+2. makeMemo      ->  useMemo
+3. makeCallback  ->  useCallback
+```
+
 ```javascript
-import {createBrowserRouter, store, createRouterStore, makeEffect} from "react-browser-router-store";
+import {createBrowserRouter, store, createRouterStore, makeEffect, makeMemo} from "react-browser-router-store";
 
 function makeCount() {
   const count = 0;
@@ -735,12 +781,12 @@ function makeCount() {
   // 添加副作用，功能类似 useEffect，返回一个元组，将 useEffect两个参数颠倒过来
   makeEffect(({state}, dispatch) => {
     return [
-      // 依赖
+      // 依赖数组
       [state.count],
-      // 依赖改变后的操作
+      // 依赖改变后的操作，newValue oldValue 对应依赖数组，oldValue第一次为 undefined
       (newValue, oldValue) => {
         console.log(newValue, oldValue);
-        // 返回清理函数
+        // 返回清理函数，下一次操作执行前，它会执行
         return () => {
 
         };
@@ -748,13 +794,30 @@ function makeCount() {
     ];
   });
 
+  // 功能类似 useMemo，依赖改变后重新计算
+  // 通过  countCalc.value 拿到结果
+  const countCalc = makeMemo(
+    // 依赖数组
+    ({state}) => [state.count],
+    // 依赖改变后的操作
+    (newValue, oldValue) => {
+      return newValue[0] + 1;
+    }
+  );
+
   return {
     count,
+    countCalc,
     add,
   }
 }
 
-// 现在是一个完整的 hooks 了
+// 现在是一个完整的 hook 了
+// count  ->  数据
+// add    ->  修改数据
+// makeEffect  ->  监控 count，改变后执行相关操作，并有清理函数
+// makeMemo    ->  监控 count，改变后重新计算
+// 反思：add 直接对状态修改，是同步的，现在缺少异步的
 ```
 
 ```javascript
@@ -769,12 +832,16 @@ import {
 function makeCount() {
   const count = 0;
 
-  // 已经有结果，直接对状态进行修改
+  // 已经有结果，直接对状态进行修改 （同步修改）
   function add(state) {
     state.count += 1;
   }
 
-  // 先加工数据，然后返回一个新的 action
+  // 先加工数据，然后返回一个新的 action （异步修改）
+  // 因为返回的是一个新的 action，所以可以链式的进行调用
+  // 比如：返回 {type: addDelay1, ...} -> {type: addDelay2, ...} -> ...  -> {type: add}
+  // addDelay1  addDelay2 都是通过 createReducerHandle 创建的
+  // 最后返回 同步 的 action，对状态直接进行修改
   const addDelay = createReducerHandle(async (state, action) => {
     await new Promise(resolve => setTimeout(resolve, action.delay));
     return {type: add};
@@ -804,6 +871,10 @@ function Index() {
     </div>
   );
 }
+
+// makeCount 是一个完整的 hook
+// 但是仅适用于 router.useRouterStoreCompose
+// 因为其他的不会，而且副作用开销还是挺大的
 ```
 
 ```javascript
@@ -919,11 +990,11 @@ export default createComponentWithStore(routerStoreCompose(Index), indexStore);
 ```
 
 ```text
-routerNativeHooks
+routerNative        ->  没有使用仓库
 routerStore         ->  router.useRouterStore
 routerStoreState    ->  router.useRouterStoreState
 routerStoreReducer  ->  router.useRouterStoreReducer
-routerStoreCompose  ->  router.useRouterStoreCompose
+routerStoreCompose  ->  router.useRouterStoreCompose （一定要包装，因为子组件中也使用仓库，副作用 makeEffect... 会执行多次）
 
 对组件进行包装，防止路由切换时多渲染一次
 ```
@@ -959,7 +1030,8 @@ function Index() {
   );
 }
 
-// 不会影响组件渲染的路由 hooks 放这里
+// 有两个参数：1. 组件  2. 函数
+// 不会影响组件渲染的路由 hooks 放这里的函数里面
 // 影响组件渲染的路由 hooks 放组件中，比如: useNavigation、useActionData
 export default createComponentWithStore(routerStoreCompose(Index, () => ({
   location: useLocation(),
@@ -969,7 +1041,8 @@ export default createComponentWithStore(routerStoreCompose(Index, () => ({
 ### 组件
 
 > `Show`  管理一个 `promise`  
-> `ShowList`  `Resolve`  管理多个 `promise`
+> `ShowList`  `Resolve`  管理多个 `promise`，共用一个加载状态  
+> `ShowOrder`  管理多个 `Show`，让其按照一定规则展示结果
 
 > 思考：一般组件从外部接口获取数据，我们的写法是...
 > 1. 先创建一个状态
@@ -982,6 +1055,7 @@ export default createComponentWithStore(routerStoreCompose(Index, () => ({
 > `react` 有一个实验性的hook  `use`，我们对这个功能简单封装了一下
 
 ```javascript
+// Show 组件
 import {useState} from "react";
 import {Show} from "react-browser-router-store";
 
@@ -1005,6 +1079,7 @@ function Foo() {
 ```
 
 ```javascript
+// ShowList  Resolve 组件
 import {useState} from "react";
 import {ShowList, Resolve} from "react-browser-router-store";
 
@@ -1033,8 +1108,46 @@ function Foo() {
 }
 ```
 
+```javascript
+// ShowOrder  Show 组件
+import {ShowOrder, Show} from "react-browser-router-store";
+
+async function sleep(delay, value) {
+  await new Promise(resolve => setTimeout(resolve, delay));
+  return value;
+}
+
+// 组件依赖多个外部接口，有的时候，必须按照接口的顺序去展示结果
+// 如下，同时请求3个接口，但是必须 p1 展示结果后，在展示 p2，在展示 p3
+// 总共4中情况：
+// 1. mode -> "forward"               展示顺序  p1 p2 p3
+// 2. mode -> "backward"              展示顺序  p3 p2 p1
+// 3. mode -> "together"              展示顺序  一起完成后统一展示
+// 4. mode -> undefined（组件不写mode） 展示顺序  先完成先展示
+function Foo() {
+  const p1 = sleep(3000, "hello");
+  const p2 = sleep(2000, "hi");
+  const p3 = sleep(1000, "你好");
+  return (
+    <div>
+      <ShowOrder mode="forward">
+        <Show resolve={p1} loading={<h1>loading...</h1>}>
+          {value => <h1>{value}</h1>}
+        </Show>
+        <Show resolve={p2} loading={<h1>loading...</h1>}>
+          {value => <h1>{value}</h1>}
+        </Show>
+        <Show resolve={p3} loading={<h1>loading...</h1>}>
+          {value => <h1>{value}</h1>}
+        </Show>
+      </ShowOrder>
+    </div>
+  );
+}
+```
+
 ---
 
-***完结 ~***
+> ***完结 ~***
 
 ___

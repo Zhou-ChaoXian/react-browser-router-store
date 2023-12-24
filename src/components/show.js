@@ -34,6 +34,7 @@ import {createElement, Suspense, Component, Fragment, useEffect, useLayoutEffect
 
 export {
   Show,
+  ShowOrder,
   ShowList,
   Resolve,
   TimeoutError,
@@ -63,13 +64,55 @@ function Show({resolve, loading = false, error = (_) => false, onStart, onEnd, c
   );
 }
 
+const modeStates = new Set(["forward", "backward", "together"]);
+
+/**
+ * @param mode {"forward" | "backward" | "together" | undefined}
+ * @param delay {number}
+ * @param children {ReactNode | ReactElement<ShowProps> | (ReactNode | ReactElement<ShowProps>)[]}
+ * @return {React.ReactElement}
+ */
+function ShowOrder({mode, delay = 300, children}) {
+  if (!modeStates.has(mode)) return children;
+  if (!Array.isArray(children))
+    children = [children];
+  const resolves = children.map(child => child?.type === Show ? child.props.resolve : Nop);
+  if (mode === "together") {
+    const promises = [], position = [];
+    resolves.forEach((resolve, index) => {
+      if (resolve instanceof Promise && !Reflect.has(resolve, _tracked)) {
+        promises.push(trackedPromise(resolve));
+        position.push(index);
+      }
+    });
+    if (promises.length > 0) {
+      const all = Promise.allSettled(promises);
+      position.forEach((pos, index) => resolves[pos] = all.then(() => promises[index]));
+    }
+  } else {
+    const fnName = mode === "backward" ? "reduceRight" : "reduce";
+    resolves[fnName]((prev, current, index) => {
+      if (current instanceof Promise && !Reflect.has(current, _tracked)) {
+        const promise = trackedPromise(current), fn = () => sleep(delay, promise);
+        return resolves[index] = prev.then(fn, fn);
+      }
+      return prev;
+    }, Promise.resolve());
+  }
+  return createElement(Fragment, null, ...resolves.map((resolve, index) => {
+    return resolve === Nop ?
+      children[index] :
+      createElement(Show, {...children[index].props, resolve});
+  }));
+}
+
 /**
  * @param loading {React.ReactNode}
  * @param timeout {number}
  * @param delay {number}
  * @param onStart {() => any}
  * @param onEnd {() => any}
- * @param children {React.ReactNode | Resolve | (React.ReactNode | Resolve)[]}
+ * @param children {React.ReactNode | ReactElement<ResolveProp> | (React.ReactNode | ReactElement<ResolveProp>)[]}
  * @return {React.ReactElement}
  */
 function ShowList({loading = false, timeout = 0, delay = 300, onStart, onEnd, children}) {

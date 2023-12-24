@@ -41,10 +41,7 @@ const routerStoreEffects = [];
 const routerStoreEffectPlugin = {
   name: "routerStoreEffectPlugin",
   install: store => {
-    Object.defineProperties(store.detail, {
-      [effects]: {value: []},
-      memo: {value: {}},
-    });
+    Object.defineProperty(store.detail, effects, {value: []});
     store.detail[requestBeforeHandles].push(() => {
       if (routerStoreEffects.length > 0) {
         routerStoreEffects.splice(0);

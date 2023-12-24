@@ -1,5 +1,5 @@
 .gitignore
-rollup.config.js
+rollup.config.mjs
 package-lock.json
 .git
 .idea
