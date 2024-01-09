@@ -2,13 +2,10 @@
 
 ## 简介
 
-> 封装路由（`react-router-dom`）和仓库（`redux`）  
-> 路由：对 `react-router-dom v6`（数据路由） 进行增强，不改变原始的用法（只加功能）  
-> 仓库：重新实现 `redux` 思想，并将功能添加进路由  
-> ***仓库中实现 hooks 思想***
+> 封装 `react` 浏览器端路由（`react-router-dom v6`）  
+> 简单、强大的 `react` 路由管理工具
 
-
-> 增强的功能如下：
+## 功能
 
 1. [过渡（`transition`，路由切换提供过渡或动画效果）](#添加过渡效果)
 2. [缓存（`keepalive`，缓存路由组件）](#缓存)
@@ -16,14 +13,23 @@
 4. [别名（`alias`，一个路由有多个路径）](#别名)
 5. [增强（`enhancer`，对路由进行布局增强，每次切换路由主动调用）](#增强)
 6. [包装（`wrapper`，用组件对路由进行包装）](#包装)
-7. [错误（`guardError`，在进入下一个路由前发生错误，进行处理）](#错误)
-8. [**仓库（`store`，路由仓库，每一个路由都可以拥有一个仓库）**](#仓库)
-9. [导航守卫（`beforeEach  afterEach`，在路由切换前进行调用）](#导航守卫)
-10. [动态路由（`addRoutes`，添加路由）](#动态路由)
-11. [优化](#优化)
-12. [组件（管理 `promise` 的功能性组件）](#组件)
+7. [拆分（`views`，对路由组件进行拆分，动态配置）](#拆分路由组件)
+8. [错误（`guardError`，在进入下一个路由前发生错误，进行处理）](#错误)
+9. [通用设置（`global`，设置通用的效果）](#通用设置)
+10. [**仓库（`store`，路由仓库，每一个路由都可以拥有一个仓库）**](#仓库)
+11. [导航守卫（`beforeEach  afterEach`，在路由切换前后进行处理）](#导航守卫)
+12. [动态路由（`addRoutes`，添加路由）](#动态路由)
+13. [优化（防止路由组件切换多渲染一次）](#优化)
+14. [组件 - 1（`Show` 管理 `promise` 的组件）](#组件1)
+15. [组件 - 2（`Transition` 过渡效果的组件）](#组件2)
+16. [组件 - 3（`Keepalive` 缓存效果的组件）](#组件3)
+17. [优化过渡组件和缓存组件（组件外层多一层 `div`）](#优化过渡和缓存组件)
+18. [组件 - 4（`ViewTransition` 使用视图过渡 api 的过渡效果组件）](#组件4)
+19. [优化视图过渡组件（组件外层多一层 `div`）](#优化视图过渡组件)
+20. [组件 - 5（`Await`，处理形式意义上的 `async` 函数组件）](#组件5)
+21. [定义异步组件（`defineAsyncComponent`）](#异步组件)
 
-> 功能 **1 - 8** 实现方式：在路由对象中加了 `meta` 属性，他们都是 `symbol`
+> 功能 ***1 - 10***，在路由对象中加了 `meta` 属性，他们都是 `symbol`
 
 ```javascript
 const router = createBrowserRouter([
@@ -34,7 +40,6 @@ const router = createBrowserRouter([
       [alias]: ["/index", "/ind"],
       [transition]: {
         type: "transition",
-        disabled: false,
       },
       [keepalive]: {
         include: () => true,
@@ -44,15 +49,16 @@ const router = createBrowserRouter([
 ]);
 ```
 
+## 安装
+
+```text
+npm install react-browser-router-store
+```
+
 ## 教程
 
-> 没有教程，一起实现一个简单的 **React** 项目即可
-
----
-
-> ***学的愉快，学的开心 ~***
-
-___
+> 没有教程，一起实现一个简单的 **React** 项目即可  
+> ***学的开心 ~***
 
 ## 开始
 
@@ -144,7 +150,8 @@ export default function App() {
 ### 添加过渡效果
 
 > 过渡组件的props 类似 vue 的过渡组件  
-> name: 默认是 v  
+> name: 默认是 v
+>
 > `${name}-enter-from` 进入之前的样式  
 > `${name}-enter-active` 进入时如何过渡  
 > `${name}-enter-to` 进入后的样式
@@ -153,10 +160,17 @@ export default function App() {
 > `${name}-leave-active` 离开时如何过渡  
 > `${name}-leave-to` 离开后的样式
 >
-> disabled: 默认是 false，表示不使用过渡功能
->
-> type: "transition" | "animation"  
-> transition表示过渡效果，animation表示动画效果
+> `onEnter(el)` 如何进入，el 是根元素  
+> `onLeave(el, done)` 如何离开，el 是根元素，done 离开结束后调用
+
+```text
+type: "transition" | "animation" | "animate" | undefined
+
+1. transition   ->   css 过渡效果
+2. animation    ->   css 动画效果
+3. animate      ->   js  动画效果
+4. undefined    ->       没有效果
+```
 
 ```css
 /*在全局的 css 文件中添加*/
@@ -201,12 +215,35 @@ const router = createBrowserRouter([
     element: <Index/>,
     meta: {
       [transition]: {
-        // 过渡效果
+        // css过渡效果
         type: "transition",
-        // 动画效果
+
+        // css动画效果
         // name: "test",
         // type: "animation",
-        disabled: false
+
+        // js动画效果
+        // type: "animate",
+        onEnter: (el) => {
+          el.animate([
+            {opacity: "0", transform: "scale(0.9)"},
+            {opacity: "1", transform: "none"},
+          ], {
+            duration: 500,
+            easing: "linear"
+          })
+        },
+        onLeave: (el, done) => {
+          const animate = el.animate([
+            {opacity: "1", transform: "none"},
+            {opacity: "0", transform: "scale(0.9)"},
+          ], {
+            duration: 500,
+            easing: "linear"
+          });
+          // 一定要调用 done
+          animate.finished.then(() => done());
+        }
       }
     }
   },
@@ -233,7 +270,6 @@ const router = createBrowserRouter([
     meta: {
       [transition]: {
         type: "transition",
-        disabled: false
       },
       [keepalive]: {
         include: () => true,
@@ -288,9 +324,27 @@ function Foo() {
 }
 ```
 
+```javascript
+// 子路由占位
+// 在子路由中 使用 useOutletContext 获取传递的 context
+// 使用 react-router-dom 的 Outlet，子路由缓存会失效
+import {Outlet, useOutletContext} from "react-browser-router-store";
+
+function Foo() {
+  return (
+    <div>
+      <h1>foo</h1>
+      <Link to="/">
+        <h1>index</h1>
+      </Link>
+      <Outlet context={"hello"}/>
+    </div>
+  );
+}
+```
+
 > 快试一试效果， <kbd>f12</kbd> 打开浏览器控制台，查看元素，看看切换路由后 dom 的情况。  
-> 给组件添加状态并修改状态（`useState`），切换路由并查看状态是否保留  
-> 给 Foo 添加缓存效果
+> 给组件添加状态并修改状态（`useState`），切换路由并查看状态是否保留
 
 ### 别名
 
@@ -313,7 +367,6 @@ const router = createBrowserRouter([
     meta: {
       [transition]: {
         type: "transition",
-        disabled: false
       },
       [keepalive]: {
         include: () => true,
@@ -361,7 +414,6 @@ const router = createBrowserRouter([
     meta: {
       [transition]: {
         type: "transition",
-        disabled: false
       },
       [keepalive]: {
         include: () => true,
@@ -417,7 +469,6 @@ const router = createBrowserRouter([
     meta: {
       [transition]: {
         type: "transition",
-        disabled: false
       },
       [keepalive]: {
         include: () => true,
@@ -475,7 +526,6 @@ const router = createBrowserRouter([
     meta: {
       [transition]: {
         type: "transition",
-        disabled: false
       },
       [keepalive]: {
         include: () => true,
@@ -561,31 +611,45 @@ router.afterEach((to) => {
 
 ### 动态路由
 
-> 添加路由，注意：需要添加全新的路由，因为原有的路由 element 已经被处理过。在原有路由中添加，会多次处理 element
+> 通过 `router.routes` 获取所有路由，在其中添加路由数据  
+> `router.addRoutes(router.routes)` 返回一个 promise，拿到新的 `navigate`  
+> ***注意：***
+> 1. ***旧的 `navigate` 已失效，只能使用新的***
+> 2. ***必须等 `promise` 完成***
 
 ```javascript
-// 修改代码
-function getBaseRoutes() {
-  return [
-    {}
-  ]
-}
-
-const router = createBrowserRouter(getBaseRoutes());
-```
-
-```javascript
-// 添加路由通常在登录页面中
+// 添加路由通常在登录页面中，一般和路由守卫配合
+router.beforeEach(async (to, from, navigateGuard) => {
+  // 判断
+  if (!router.hasRoute("/bar")) {
+    if (to.pathname !== "/login") {
+      // 跳转到登录页面
+      navigateGuard.next("/login?redirect=" + encodeURIComponent(to.pathname));
+    }
+  }
+});
 
 function Login() {
+  // 获取 redirect 地址
+  let redirect = useSearchParams()[0].get("redirect");
+  if (redirect === null) {
+    redirect = "/"
+  } else {
+    redirect = decodeURIComponent(redirect);
+    if (redirect === "/login")
+      redirect = "/";
+  }
 
   async function login() {
-    const baseRoutes = getBaseRoutes();
+    // 从接口获取路由数据
     const newRoutes = await getRoutesByApi();
+    // 转换路由数据
     const routes = handle(newRoutes);
-    baseRoutes.push(...routes);
-    const navigate = await router.addRoutes(baseRoutes);
-    navigate("/");
+    // 添加进当前路由
+    router.routes.push(...routes);
+    const navigate = await router.addRoutes(router.routes);
+    // 跳转
+    navigate(redirect, {replace: true});
   }
 
   return (
@@ -594,8 +658,221 @@ function Login() {
 }
 ```
 
-> 动态路由通常和路由守卫配合，如果不满足条件，跳转到登录页面，添加路由  
-> 尝试一下
+```javascript
+// 直接在路由守卫中添加
+router.beforeEach(async (to, from, navigateGuard) => {
+  // 判断
+  if (!router.hasRoute("/bar")) {
+    // 从接口获取路由数据
+    const newRoutes = await getRoutesByApi();
+    // 转换路由数据
+    const routes = handle(newRoutes);
+    // 添加进当前路由
+    router.routes.push(...routes);
+    const navigate = await router.addRoutes(router.routes);
+    // 注意  navigateGuard.next 已失效
+    // 如果想导航到其他路由，请使用新的 navigate
+  }
+});
+```
+
+### 拆分路由组件
+
+> 将一个大的路由组件拆分成多个小组件，动态配置
+
+```javascript
+import {createBrowserRouter} from "react-browser-router-store";
+
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+  }
+]);
+
+// 接下来拆分 Foo 组件
+function Foo() {
+  return (
+    <div>
+      {/* 放到 Foo1 组件中 */}
+      <h1>hello world</h1>
+      {/* 放到 Foo2 组件中 */}
+      <div>
+        <h1>hi</h1>
+        {/* 放到 Foo21 组件中 */}
+        <h1>你好</h1>
+      </div>
+    </div>
+  );
+}
+```
+
+```javascript
+import {createBrowserRouter, views, RouteView} from "react-browser-router-store";
+
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+    meta: {
+      [views]: {
+        default: {component: Foo1},
+        foo2: {component: Foo2, children: {default: {component: Foo21}}},
+      }
+    }
+  }
+]);
+
+function Foo() {
+  return (
+    <div>
+      {/* name 默认是 default */}
+      <RouteView/>
+      <RouteView name="foo2"/>
+    </div>
+  );
+}
+
+function Foo1() {
+  return <h1>hello world</h1>
+}
+
+function Foo2() {
+  return (
+    <div>
+      <h1>hi</h1>
+      <RouteView/>
+    </div>
+  );
+}
+
+function Foo21() {
+  return <h1>你好</h1>
+}
+
+// 将当前路由拆分成多个小组件，动态配置，扩展性大大加强
+// views 提供了一种拆分路由组件的方式，根据实际情况判断是否使用
+```
+
+> 通过 `RouteView` 给组件传递 `props` `children`
+
+```javascript
+// 删除不必要的代码，只保留 Foo 和 Foo1 组件演示
+import {createBrowserRouter, views, RouteView} from "react-browser-router-store";
+
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+    meta: {
+      [views]: {
+        // component 组件，props 属性
+        default: {component: Foo1, props: {name: "james"}},
+      }
+    }
+  }
+]);
+
+function Foo() {
+  return (
+    <div>
+      <RouteView/>
+    </div>
+  );
+}
+
+// 可以拿到路由中对应的 props
+function Foo1({name}) {
+  return (
+    <div>
+      <h1>{name}</h1>
+    </div>
+  );
+}
+```
+
+```javascript
+import {createBrowserRouter, views, RouteView} from "react-browser-router-store";
+
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+    meta: {
+      [views]: {
+        default: {component: Foo1, props: {name: "james"}},
+      }
+    }
+  }
+]);
+
+function Foo() {
+  const message = "test";
+  return (
+    <div>
+      <RouteView>
+        <h1>hello</h1>
+        <h1>{message}</h1>
+      </RouteView>
+    </div>
+  );
+}
+
+// 可以拿到 Foo 组件中 RouteView 的 children
+function Foo1({name, children}) {
+  return (
+    <div>
+      <h1>{name}</h1>
+      {children}
+    </div>
+  );
+}
+```
+
+```javascript
+import {createBrowserRouter, views, RouteView} from "react-browser-router-store";
+
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+    meta: {
+      [views]: {
+        default: {component: Foo1, props: {name: "james"}},
+      }
+    }
+  }
+]);
+
+// RouteView的子元素是个函数
+function Foo() {
+  const message = "test";
+  return (
+    <div>
+      <RouteView>
+        {/* Component props 对应路由中的配置，分别是 Foo1 和 {name: "james"} */}
+        {(Component, props) => {
+          return (
+            <Component {...props} message={message}>
+              <h1>hello</h1>
+            </Component>
+          );
+        }}
+      </RouteView>
+    </div>
+  );
+}
+
+function Foo1({name, message, children}) {
+  return (
+    <div>
+      <h1>{name}</h1>
+      {children}
+      <h1>{message}</h1>
+    </div>
+  );
+}
+```
 
 ### 错误
 
@@ -610,30 +887,48 @@ import {guardError} from "react-browser-router-store";
 // }
 ```
 
----
+### 通用设置
 
-> 全局设置 过渡、缓存、增强、包装、错误  
-> `createBrowserRouter` 函数第三个参数  
-> ***局部的设置会覆盖全局的设置***
+> 快速设置通用效果... 过渡、缓存、增强、包装、错误
 
 ```javascript
 import {createBrowserRouter, transition, keepalive, enhancer, wrapper, guardError} from "react-browser-router-store";
 
-// 可以快速的设置所有路由的效果
+// 快速设置所有路由的效果
 const router = createBrowserRouter([], undefined, {
   [transition]: {},
   [keepalive]: {},
   [enhancer]: [],
   [wrapper]: [],
-  [guardError]: () => {}
+  [guardError]: () => {
+  }
 });
+
+// 快速设置当前路由全部子路由的效果
+const router = createBrowserRouter([
+  {
+    path: "/foo",
+    element: <Foo/>,
+    meta: {
+      [global]: {
+        [transition]: {},
+        [keepalive]: {},
+        [enhancer]: [],
+        [wrapper]: [],
+        [guardError]: () => {
+        }
+      }
+    },
+    children: [...]
+  }
+]);
+
+// 优先级从高到底
+// 局部设置  ->  父部设置  ->  全局设置  
 ```
----
 
 ### 仓库
 
-> 重新实现了 `redux` 的思想，并添加了一些功能  
-> **并且在仓库中实现 hooks 功能**  
 > 称之为路由仓库，每个路由都可以拥有一个仓库，可以保留状态或不保留
 
 ```javascript
@@ -710,7 +1005,7 @@ function Index() {
   );
 }
 
-// 反思：目前遇到的仓库，状态在一堆，操作状态的行为在一堆，和 hooks 思想不符
+// 反思：仓库的状态在一堆，操作状态的行为在一堆，和 hooks 思想不符
 ```
 
 ```javascript
@@ -769,7 +1064,14 @@ function Index() {
 ```
 
 ```javascript
-import {createBrowserRouter, store, createRouterStore, makeEffect, makeMemo} from "react-browser-router-store";
+import {
+  createBrowserRouter,
+  store,
+  createRouterStore,
+  makeEffect,
+  makeMemo,
+  makeCallback,
+} from "react-browser-router-store";
 
 function makeCount() {
   const count = 0;
@@ -805,18 +1107,30 @@ function makeCount() {
     }
   );
 
+  // 功能类似 useCallback，依赖改变后重新生成函数
+  // 通过 func.value 拿到结果
+  // 调用函数 func.value(1, 2, 3)  最后两个参数 newValue oldValue 会自动添加
+  const func = makeCallback(
+    ({state}) => [state.count],
+    (a, b, c, newValue, oldValue) => {
+      console.log(a, b, c, newValue, oldValue);
+    }
+  );
+
   return {
     count,
     countCalc,
     add,
-  }
+    func,
+  };
 }
 
 // 现在是一个完整的 hook 了
-// count  ->  数据
-// add    ->  修改数据
-// makeEffect  ->  监控 count，改变后执行相关操作，并有清理函数
-// makeMemo    ->  监控 count，改变后重新计算
+// count         ->  仓库中的一个数据
+// add           ->  修改数据
+// makeEffect    ->  监控 count，改变后执行相关操作，并有清理函数
+// makeMemo      ->  监控 count，改变后重新计算
+// makeCallback  ->  监控 count，改变后重新生成函数
 // 反思：add 直接对状态修改，是同步的，现在缺少异步的
 ```
 
@@ -874,7 +1188,7 @@ function Index() {
 
 // makeCount 是一个完整的 hook
 // 但是仅适用于 router.useRouterStoreCompose
-// 因为其他的不会，而且副作用开销还是挺大的
+// 因为其他的不会生效，而且副作用开销还是挺大的
 ```
 
 ```javascript
@@ -994,7 +1308,7 @@ routerNative        ->  没有使用仓库
 routerStore         ->  router.useRouterStore
 routerStoreState    ->  router.useRouterStoreState
 routerStoreReducer  ->  router.useRouterStoreReducer
-routerStoreCompose  ->  router.useRouterStoreCompose （一定要包装，因为子组件中也使用仓库，副作用 makeEffect... 会执行多次）
+routerStoreCompose  ->  router.useRouterStoreCompose
 
 对组件进行包装，防止路由切换时多渲染一次
 ```
@@ -1038,7 +1352,7 @@ export default createComponentWithStore(routerStoreCompose(Index, () => ({
 })), indexStore);
 ```
 
-### 组件
+### 组件1
 
 > `Show`  管理一个 `promise`  
 > `ShowList`  `Resolve`  管理多个 `promise`，共用一个加载状态  
@@ -1062,6 +1376,8 @@ import {Show} from "react-browser-router-store";
 function Foo() {
   // 接口请求数据
   // setData 可以传 promise 或 值
+  // 如果 setData 设置了一个 promise，就会先展示 loading，promise 完成后 展示内容
+  // 如果 setData 设置 promise，还想展示旧的内容，请看下一个示例
   const [data, setData] = useState(() => Promise.resolve("hello world"));
   return (
     <div>
@@ -1076,6 +1392,119 @@ function Foo() {
 }
 
 // 请求接口数据现在就像组件中的一个普通状态
+```
+
+```javascript
+import {useState} from "react";
+import {Show} from "react-browser-router-store";
+
+let count = 0;
+
+async function getData() {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  count += 1;
+  return "hello " + count;
+}
+
+function Foo() {
+  const [data, setData] = useState(() => getData());
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <h1>{count}</h1>
+      <button onClick={() => {
+        setCount(count + 1);
+        // 每次都会展示 loading 效果
+        setData(getData());
+      }}>
+        <h1>add</h1>
+      </button>
+      <Show resolve={data} loading={<h1>loading...</h1>}>
+        {value => <h1>{value}</h1>}
+      </Show>
+    </div>
+  );
+}
+
+// 如何展示旧内容，不展示 loading（注意：但是第一次肯定是 loading）
+// ====================================================
+// ====================================================
+// 方法一
+import {useDeferredValue} from "react";
+
+function Foo() {
+  const [data, setData] = useState(() => getData());
+  // 使用 useDeferredValue 包装一下值
+  const deferredData = useDeferredValue(data);
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <h1>{count}</h1>
+      <button onClick={() => {
+        setCount(count + 1);
+        setData(getData());
+      }}>
+        <h1>add</h1>
+      </button>
+      {/* 使用包装过的值，就会展示旧的内容，不展示 loading */}
+      <Show resolve={deferredData} loading={<h1>loading...</h1>}>
+        {value => <h1>{value}</h1>}
+      </Show>
+    </div>
+  );
+}
+
+// ====================================================
+// ====================================================
+// 方法二
+import {startTransition} from "react";
+
+// 如果需要 标记，使用 import {useTransition} from "react";
+
+function Foo() {
+  const [data, setData] = useState(() => getData());
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <h1>{count}</h1>
+      <button onClick={() => {
+        setCount(count + 1);
+        // 设置值用 startTransition 包装一下
+        startTransition(() => {
+          setData(getData());
+        });
+      }}>
+        <h1>add</h1>
+      </button>
+      <Show resolve={data} loading={<h1>loading...</h1>}>
+        {value => <h1>{value}</h1>}
+      </Show>
+    </div>
+  );
+}
+
+// ====================================================
+// ====================================================
+// 方法三
+function Foo() {
+  const [data, setData] = useState(() => getData());
+  const [count, setCount] = useState(0);
+  return (
+    <div>
+      <h1>{count}</h1>
+      <button onClick={async () => {
+        setCount(count + 1);
+        const data = await getData();
+        setData(data);
+      }}>
+        <h1>add</h1>
+      </button>
+      <Show resolve={data} loading={<h1>loading...</h1>}>
+        {value => <h1>{value}</h1>}
+      </Show>
+    </div>
+  );
+}
 ```
 
 ```javascript
@@ -1146,8 +1575,459 @@ function Foo() {
 }
 ```
 
+### 组件2
+
+> `Transition`  
+> 组件切换时提供过渡效果
+
+```javascript
+import {Transition} from "react-browser-router-store";
+
+// global.css
+//
+// .v-enter-from, .v-leave-to {
+//   opacity: 0;
+//   transform: scale(.9);
+// }
+//
+// .v-enter-active, .v-leave-active {
+//   transition: all .5s linear;
+// }
+
+function Foo() {
+  const elements = {
+    foo: "Foo Component",
+    bar: "Bar Component",
+  };
+  const [key, setKey] = useState("foo");
+  return (
+    <div>
+      <button onClick={() => setKey("foo")}>
+        <h1>foo</h1>
+      </button>
+      <button onClick={() => setKey("bar")}>
+        <h1>bar</h1>
+      </button>
+      <Transition type="transition" uniqueKey={key}>
+        {elements[key]}
+      </Transition>
+    </div>
+  );
+}
+```
+
+### 组件3
+
+> `Keepalive`  
+> 组件切换保留 dom，提供缓存效果
+
+```javascript
+import {Keepalive} from "react-browser-router-store";
+
+function Foo() {
+  const elements = {
+    foo: "Foo Component",
+    bar: "Bar Component",
+  };
+  const [key, setKey] = useState("foo");
+  return (
+    <div>
+      <button onClick={() => setKey("foo")}>
+        <h1>foo</h1>
+      </button>
+      <button onClick={() => setKey("bar")}>
+        <h1>bar</h1>
+      </button>
+      <Keepalive uniqueKey={key} include={() => true}>
+        {elements[key]}
+      </Keepalive>
+    </div>
+  );
+}
+```
+
+### 优化过渡和缓存组件
+
+> 通过查看 dom 发现，`Transition` 和 `Keepalive` 组件外层多一层 `div`  
+> 可能会影响布局
+
+> 解决方法：使用 `forwardRef` 创建组件，指定 `ref`       
+> ***注意：必须要设置 `ref`，不然会报错***  
+> ***不要用 `useImperativeHandle` 处理 `ref`***
+
+```javascript
+import {forwardRef, useState} from "react";
+import {Transition, Keepalive} from "react-browser-router-store";
+
+function Foo() {
+  const elements = {
+    bar: <Bar/>,
+    tee: <Tee/>,
+  };
+  const [key, setKey] = useState("bar");
+  return (
+    <div>
+      <button onClick={() => setKey("bar")}>
+        <h1>bar</h1>
+      </button>
+      <button onClick={() => setKey("tee")}>
+        <h1>tee</h1>
+      </button>
+      <Transition type="transition" uniqueKey={key}>
+        {elements[key]}
+      </Transition>
+      <hr/>
+      <Keepalive uniqueKey={key} include={() => true}>
+        {elements[key]}
+      </Keepalive>
+    </div>
+  );
+}
+
+// 通过 forwardRef 创建组件
+// 必须要设置 ref，否则会报错
+const Bar = forwardRef((props, ref) => {
+  return (
+    <h1 ref={ref}>bar</h1>
+  );
+});
+
+const Tee = forwardRef((props, ref) => {
+  return (
+    <h1 ref={ref}>tee</h1>
+  );
+});
+```
+
+### 组件4
+
+> `ViewTransition`  
+> 视图过渡 view transition 提供了更丝滑的过渡效果  
+> 可能浏览器不支持  
+> 有兴趣可以试一试  
+> 没有将功能合并进 `Transition` 的原因如下：  
+> ***页面中如果存在多个 view transition name，名字必须不一样，不通用***  
+> ***所以单独分出来***
+
+```css
+/*全局 css 样式*/
+
+::view-transition-old(root), ::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(test) {
+  animation: view-show1 .5s linear 1 forwards;
+}
+
+::view-transition-new(test) {
+  animation: view-show2 1s linear 1 forwards;
+}
+
+@keyframes view-show1 {
+  from {
+    opacity: 1;
+    transform: none;
+    clip-path: circle(100%);
+  }
+  to {
+    opacity: 0;
+    transform: scale(.8);
+    clip-path: circle(0);
+  }
+}
+
+@keyframes view-show2 {
+  from, 50% {
+    opacity: 0;
+    transform: scale(.8);
+    clip-path: circle(0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: circle(100%);
+  }
+}
+```
+
+```javascript
+import {useState} from "react";
+import {ViewTransition} from "react-browser-router-store";
+
+function Foo() {
+  const elements = {
+    bar: <Bar/>,
+    tee: <Tee/>,
+  };
+  const [key, setKey] = useState("bar");
+  return (
+    <div>
+      <button onClick={() => setKey("bar")}>
+        <h1>bar</h1>
+      </button>
+      <button onClick={() => setKey("tee")}>
+        <h1>tee</h1>
+      </button>
+      <ViewTransition
+        name="test"
+        uniqueKey={key}
+        onViewTransition={(el, startViewTransition) => {
+          // 必须要调用
+          startViewTransition();
+        }}
+      >
+        {elements[key]}
+      </ViewTransition>
+    </div>
+  );
+}
+
+function Bar() {
+  return (
+    <div style={{height: "100px", backgroundColor: "lightpink"}}>
+      <h1>bar</h1>
+    </div>
+  );
+}
+
+function Tee() {
+  return (
+    <div style={{height: "200px", backgroundColor: "lightgreen"}}>
+      <h1>tee</h1>
+    </div>
+  );
+}
+```
+
+### 优化视图过渡组件
+
+> 查看 dom 会发现 Bar 组件 Tee 组件外层多了一层 div，可能会影响布局
+
+> 解决方法：使用 `forwardRef` 创建组件，指定 `ref`       
+> ***注意：必须要设置 `ref`，不然会报错***  
+> ***不要用 `useImperativeHandle` 处理 `ref`***
+
+```javascript
+import {useState, forwardRef} from "react";
+import {ViewTransition, useViewTransition} from "react-browser-router-store";
+
+function Foo() {
+  const elements = {
+    bar: <Bar/>,
+    tee: <Tee/>,
+  };
+  const [key, setKey] = useState("bar");
+  return (
+    <div>
+      <button onClick={() => setKey("bar")}>
+        <h1>bar</h1>
+      </button>
+      <button onClick={() => setKey("tee")}>
+        <h1>tee</h1>
+      </button>
+      <ViewTransition
+        name="test"
+        uniqueKey={key}
+        onViewTransition={(el, startViewTransition) => {
+          startViewTransition();
+        }}
+      >
+        {elements[key]}
+      </ViewTransition>
+    </div>
+  );
+}
+
+// 使用 forwardRef 包装组件
+const Bar = forwardRef(function Bar(props, ref) {
+  // 必须要调用
+  useViewTransition(ref);
+  return (
+    // 设置 ref 指向 HTML 标签
+    <div ref={ref} style={{height: "100px", backgroundColor: "lightpink"}}>
+      <h1>bar</h1>
+    </div>
+  );
+});
+
+const Tee = forwardRef(function Tee(props, ref) {
+  useViewTransition(ref);
+  return (
+    <div ref={ref} style={{height: "200px", backgroundColor: "lightgreen"}}>
+      <h1>tee</h1>
+    </div>
+  );
+});
+```
+
+### 组件5
+
+> `Await`  
+> 对 `Show` 组件的二次封装，将组件写成 `async` 函数  
+> ***注意：不是真正的组件，只是一个函数，只是表面看起来像组件***
+
+```javascript
+import {Await} from "react-browser-router-store";
+
+function Foo() {
+  return (
+    // 用 Await 包住组件
+    // loading 在 promise 完成前展示
+    // error 在 promise 报错后展示，是个函数 (error) => {}，函数拿到错误信息
+    <Await loading={<h1>loading...</h1>} error={() => <h1>error...</h1>}>
+      {/* Bar 不是组件，只是组件的写法 */}
+      <Bar name="james" age={39}/>
+    </Await>
+  );
+}
+
+// Bar 不是组件，只是一个普通的异步函数，所以不能使用 hooks
+async function Bar({name, age}) {
+  // 请求外部数据的操作
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return (
+    <div>
+      <h1>{name} - {age}</h1>
+    </div>
+  );
+}
+```
+
+> ***`Await` 在内部对比 新旧 props，如果新的 props 中有数据和旧的 props 不一样，会更新组件***
+
+```javascript
+import {useRef, useState} from "react";
+import {Await} from "react-browser-router-store";
+
+function Foo() {
+  const [count, setCount] = useState(39);
+  const buttonRef = useRef(null);
+  return (
+    <div>
+      <h1>Foo - {count}</h1>
+      <button ref={buttonRef} onClick={() => setCount(count + 1)}>add</button>
+      <Await
+        // 不显示 loading 效果，显示旧页面，但是第一次是 loading
+        complete
+        loading={<h1>loading...</h1>}
+        // 开始前执行，让 button 不能点击
+        onStart={() => buttonRef.current.disabled = true}
+        // 结束后执行，恢复 button 点击
+        onEnd={() => buttonRef.current.disabled = false}
+        // 数据不一致，更新组件
+        compare={(newProps, oldProps) => newProps.age !== oldProps.age}
+      >
+        <Bar name={"james"} age={count}/>
+      </Await>
+    </div>
+  );
+}
+
+// 由此可以看出：Bar只是用来处理一些异步任务，没错就是这样
+// 如果组件不需要 hooks，一个 Bar 组件即可
+// 如果需要 hooks，添加子组件，将异步任务的结果传下去
+// 中转异步任务的结果
+// Bar 不是组件！！！只是形式
+// Bar 不是组件！！！只是形式
+// Bar 不是组件！！！只是形式
+async function Bar({name, age}) {
+  const data = await new Promise(resolve => setTimeout(resolve, 1000, "data"));
+  return (
+    <div>
+      <h1>{name} - {age}</h1>
+      <Tee data={data}/>
+    </div>
+  );
+}
+
+function Tee({data}) {
+  useEffect(() => {
+    console.log("hello");
+  }, []);
+  return (
+    <div>
+      <h1>{data}</h1>
+    </div>
+  );
+}
+```
+
+> ***只是 `Show` 组件的另一种写法，仅此而已~***
+
+### 异步组件
+
+> `defineAsyncComponent`  
+> 通过这个函数可以生成异步组件  
+> 所谓异步组件，就是依赖外部接口数据的组件，***根本没有异步组件***  
+> ***封装 `Await` 组件***  
+> ***同样只是 `Show` 组件的另一种写法，仅此而已~***
+
+```javascript
+import {useRef, useState} from "react";
+import {defineAsyncComponent, useAsyncValue} from "react-browser-router-store";
+
+function Foo() {
+  const [count, setCount] = useState(0);
+  const buttonRef = useRef(null);
+  return (
+    <div>
+      <h1>{count}</h1>
+      <button ref={buttonRef} onClick={() => setCount(count + 1)}>add</button>
+      <Bar
+        name="james"
+        age={count}
+        // 开始前执行，让 button 不能点击
+        onStart={() => {
+          buttonRef.current.disabled = true;
+        }}
+        // 结束后执行，恢复 button 点击
+        onEnd={() => {
+          buttonRef.current.disabled = false;
+        }}
+      />
+    </div>
+  );
+}
+
+const Bar = defineAsyncComponent({
+  // 组件名称
+  name: "Bar",
+  // 不显示 loading 效果，显示旧页面，但是第一次是 loading
+  complete: true,
+  // 加载效果
+  loading: <h1>loading...</h1>,
+  // 对比，数据不一致，更新组件
+  compare: (newProps, oldProps) => {
+    return newProps.age !== oldProps.age;
+  },
+  // 如果 props 发生变化，会调用，props 不包含 onStart onEnd
+  loader: async ({age}) => {
+    const data = await new Promise(resolve => setTimeout(resolve, 1000, age));
+    return "hello world " + data;
+  },
+  // 组件，props 不包含 onStart onEnd
+  Component: ({name, age}) => {
+    // 获取 loader 的结果
+    const data = useAsyncValue();
+    return (
+      <div>
+        <h1>{name} - {age}</h1>
+        <h1>{data}</h1>
+      </div>
+    );
+  }
+});
+```
+
 ---
 
+---
+
+---
+
+> 以上就是 `react-browser-router-store` 所有功能   
+> 感谢您的观看  
 > ***完结 ~***
 
-___
+## EOF

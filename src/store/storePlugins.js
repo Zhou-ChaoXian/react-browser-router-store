@@ -36,12 +36,16 @@ function getRequestErrorHandles(store) {
   return Reflect.get(store.detail, requestErrorHandles);
 }
 
-const effects = Symbol("effects");
+const effects = Symbol();
+const getFlag = Symbol();
 const routerStoreEffects = [];
 const routerStoreEffectPlugin = {
   name: "routerStoreEffectPlugin",
   install: store => {
-    Object.defineProperty(store.detail, effects, {value: []});
+    Object.defineProperties(store.detail, {
+      [effects]: {value: []},
+      [getFlag]: {value: false, writable: true},
+    });
     store.detail[requestBeforeHandles].push(() => {
       if (routerStoreEffects.length > 0) {
         routerStoreEffects.splice(0);
@@ -60,5 +64,12 @@ function addEffect(effect) {
 }
 
 function getEffects(store) {
-  return Reflect.get(store.detail, effects);
+  if (!store.detail[getFlag]) {
+    store.detail[getFlag] = true;
+    return [
+      Reflect.get(store.detail, effects),
+      () => store.detail[getFlag] = false
+    ];
+  }
+  return [[], null];
 }

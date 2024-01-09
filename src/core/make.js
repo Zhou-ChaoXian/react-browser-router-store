@@ -12,12 +12,14 @@ function makeEffect(effect) {
   addEffect(effect);
 }
 
-function makeMemo(depsHandle, computeHandle, isFactory = true) {
+function makeMemo(depsHandle, computedHandle, isFactory = true) {
   let value;
   addEffect((store) => [
     depsHandle(store),
     (newValue, oldValue) => {
-      value = isFactory ? computeHandle(newValue, oldValue) : () => computeHandle(newValue, oldValue);
+      value = isFactory ?
+        computedHandle(newValue, oldValue) :
+        (...args) => computedHandle.apply(undefined, [...args, newValue, oldValue]);
     }
   ]);
   return Object.defineProperty(Object.create(null), "value", {get: () => value});

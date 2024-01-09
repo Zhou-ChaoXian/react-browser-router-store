@@ -21,7 +21,6 @@ export {
 };
 
 const Context = createContext(null);
-const defaultUseRouterNativeHooksHandle = () => ({});
 const defaultUseRouterHooksHandle = (_) => ({});
 
 function useRouterStore() {
@@ -32,9 +31,9 @@ function useRouterHooks() {
   return useContext(Context).routerHooks;
 }
 
-function routerNative(component, useRouterNativeHooksHandle = defaultUseRouterNativeHooksHandle) {
-  return function RouterNativeHooks() {
-    const routerHooks = useRouterNativeHooksHandle();
+function routerNative(component, useRouterHooksHandle = defaultUseRouterHooksHandle) {
+  return function RouterNative() {
+    const routerHooks = useRouterHooksHandle(useRouter());
     return useState(() => generateElement(component, undefined, routerHooks))[0];
   }
 }

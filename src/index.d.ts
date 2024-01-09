@@ -1,65 +1,119 @@
-import type {ReactNode, CSSProperties, ComponentType, ReactElement} from "react";
+import type {ReactNode, CSSProperties, ComponentType, ReactElement, ForwardedRef} from "react";
 import type {RouteObject, NavigateOptions, RouterProviderProps, NavigateFunction, Location, To} from "react-router-dom";
+import type {Router as RemixRouter} from "@remix-run/router";
 
 export interface KeepaliveProps {
-  uniqueKey: string | undefined;
-  max: number;
-  include: (key: string | undefined) => boolean;
-  exclude: (key: string | undefined) => boolean;
-  style: Omit<CSSProperties, "display">;
-  children: ReactNode;
-}
-
-export interface RedirectProps {
-  path: string;
-  options: NavigateOptions;
+  uniqueKey: string;
+  max?: number;
+  include?: (key: string | undefined) => boolean;
+  exclude?: (key: string | undefined) => boolean;
+  className?: string;
+  style?: Omit<CSSProperties, "display">;
   children: ReactNode;
 }
 
 export interface TransitionProps {
-  name: string;
-  disabled: boolean;
+  type?: "transition" | "animation" | "animate" | undefined;
+  name?: string;
   uniqueKey: string | any;
-  type: "transition" | "animation";
-  className: string | undefined;
-  style: CSSProperties;
+  className?: string;
+  style?: Omit<CSSProperties, "visibility">;
   children: ReactNode;
-  enterFromClass: string | undefined;
-  enterActiveClass: string | undefined;
-  enterToClass: string | undefined;
-  leaveFromClass: string | undefined;
-  leaveActiveClass: string | undefined;
-  leaveToClass: string | undefined;
+  enterFromClass?: string;
+  enterActiveClass?: string;
+  enterToClass?: string;
+  leaveFromClass?: string;
+  leaveActiveClass?: string;
+  leaveToClass?: string;
+  onEnter?: (el: HTMLElement) => void;
+  onLeave?: (el: HTMLElement, done: () => void) => void;
+}
+
+export interface ViewTransitionInterface {
+  finished: Promise<void>;
+  ready: Promise<void>;
+  updateCallbackDone: Promise<void>;
+
+  skipTransition(): void;
+}
+
+export interface ViewTransitionProps {
+  name: string;
+  uniqueKey: string | any;
+  onViewTransition: (el: HTMLElement, startViewTransition: (cb?: () => Promise<void> | void) => ViewTransitionInterface) => void;
+  className?: string;
+  style?: Omit<CSSProperties, "visibility">;
+  children?: ReactNode;
 }
 
 export interface ShowProps {
   resolve: Promise<any> | any;
-  loading: ReactNode;
-  error: ((error: any) => ReactNode) | ReactNode;
-  onStart: () => void;
-  onEnd: () => void;
+  loading?: ReactNode;
+  error?: (error: any) => ReactNode;
+  onStart?: () => void;
+  onEnd?: () => void;
   children: (value: any) => ReactNode;
 }
 
+interface FunctionComponent<P = ObjectAny> {
+  (props: P): Promise<ReactNode> | ReactNode;
+
+  defaultProps?: Partial<P> | undefined;
+  displayName?: string | undefined;
+}
+
+export type FunctionComponentElement<P = ObjectAny> = { type: FunctionComponent<P>; props: P; key: string | number };
+
+export interface AwaitProps {
+  loading?: ReactNode;
+  error?: (error: any) => ReactNode;
+  complete?: boolean;
+  onStart?: () => void;
+  onEnd?: () => void;
+  delay?: number;
+  children: FunctionComponentElement;
+  compare?: (newProps: ObjectAny, oldProps: ObjectAny) => boolean;
+}
+
+export interface AsyncComponentOptions<P = ObjectAny> {
+  name?: string;
+  loader: (props: P) => Promise<any> | any;
+  Component: ComponentType<P>;
+  complete?: boolean;
+  loading?: ReactNode;
+  error?: (error: any) => ReactNode;
+  delay?: number;
+  compare?: (newProps: P, oldProps: P) => boolean;
+}
+
 export interface ShowOrderProps {
-  mode: "forward" | "backward" | "together" | undefined;
-  delay: number;
-  children: ReactNode | ReactElement<ShowProps> | (ReactNode | ReactElement<ShowProps>)[];
+  mode?: "forward" | "backward" | "together" | undefined;
+  delay?: number;
+  children: ReactNode | ReactElement<ShowProps, typeof Show> | (ReactNode | ReactElement<ShowProps, typeof Show>)[];
 }
 
 export interface ShowListProps {
-  loading: ReactNode;
-  timeout: number;
-  delay: number;
-  onStart: () => void;
-  onEnd: () => void;
-  children: ReactNode | ReactElement<ResolveProp> | (ReactNode | ReactElement<ResolveProp>)[];
+  loading?: ReactNode;
+  timeout?: number;
+  delay?: number;
+  onStart?: () => void;
+  onEnd?: () => void;
+  children: ReactNode | ReactElement<ResolveProp, typeof Resolve> | (ReactNode | ReactElement<ResolveProp, typeof Resolve>)[];
 }
 
 export interface ResolveProp {
   resolve: Promise<any> | any;
-  error: ((error: any) => ReactNode) | ReactNode;
+  error?: (error: any) => ReactNode;
   children: (value: any) => ReactNode;
+}
+
+export interface OutletProps {
+  context?: any;
+}
+
+export interface RouteViewProps {
+  name?: string | symbol | undefined | "default";
+  children?: ((Component: ComponentType, props?: ObjectAny) => ReactElement) | ReactElement;
 }
 
 export declare class TimeoutError extends Error {
@@ -72,48 +126,91 @@ export declare class ComponentWithStore {
 
 type deactivatedHandle = (() => void) | undefined;
 
-export declare function Transition(props: Partial<TransitionProps>): ReactElement;
+export declare function Transition(props: TransitionProps): ReactElement;
 
-export declare function Keepalive(props: Partial<KeepaliveProps>): ReactElement;
+export declare function Keepalive(props: KeepaliveProps): ReactElement;
 
 export declare function useActivated(activatedHandle: () => deactivatedHandle): void;
 
-export declare function Redirect(props: Partial<RedirectProps>): ReactNode;
+export declare function Show(props: ShowProps): ReactElement;
 
-export declare function Show(props: Partial<ShowProps>): ReactElement;
+export declare function Await(props: AwaitProps): ReactElement;
 
-export declare function ShowOrder(props: Partial<ShowOrderProps>): ReactElement;
+export declare function defineAsyncComponent<P = ObjectAny>(options: AsyncComponentOptions<P>): ComponentType<P & { onStart?: () => void; onEnd?: () => void; }>;
 
-export declare function ShowList(props: Partial<ShowListProps>): ReactElement;
+export declare function useAsyncValue(): any;
 
-export declare function Resolve(props: Partial<ResolveProp>): undefined;
+export declare function ShowOrder(props: ShowOrderProps): ReactElement;
 
-export declare const enhancer: unique symbol;
-export declare const wrapper: unique symbol;
-export declare const transition: unique symbol;
-export declare const keepalive: unique symbol;
-export declare const store: unique symbol;
-export declare const start: unique symbol;
-export declare const guardError: unique symbol;
-export declare const redirect: unique symbol;
-export declare const alias: unique symbol;
-export declare const max: unique symbol;
+export declare function ShowList(props: ShowListProps): ReactElement;
+
+export declare function Resolve(props: ResolveProp): undefined;
+
+export declare function Outlet(props: OutletProps): ReactElement;
+
+export declare function useOutlet(context?: any): ReactElement;
+
+export declare function useOutletContext(): any;
+
+export declare function RouteView(props: RouteViewProps): ReactElement;
+
+export declare function ViewTransition(props: ViewTransitionProps): ReactElement;
+
+export declare function useViewTransition(ref: ForwardedRef<HTMLElement>): void;
+
+// @ts-ignore
+export declare const global = Symbol();
+// @ts-ignore
+export declare const enhancer = Symbol();
+// @ts-ignore
+export declare const wrapper = Symbol();
+// @ts-ignore
+export declare const transition = Symbol();
+// @ts-ignore
+export declare const keepalive = Symbol();
+// @ts-ignore
+export declare const store = Symbol();
+// @ts-ignore
+export declare const start = Symbol();
+// @ts-ignore
+export declare const guardError = Symbol();
+// @ts-ignore
+export declare const redirect = Symbol();
+// @ts-ignore
+export declare const alias = Symbol();
+// @ts-ignore
+export declare const max = Symbol();
+// @ts-ignore
+export declare const views = Symbol();
 
 type EnhancerHandle = () => ReactNode;
 type Enhancer = (next: EnhancerHandle) => EnhancerHandle;
 type Props = { [key: string]: any };
 type Wrapper = ComponentType | [ComponentType, Props];
-type RedirectType = string | RedirectProps;
 type AliasType = string | string[];
 type ObjectAny = { [key: string | symbol]: any };
+type ViewsItemType = {
+  component: ComponentType;
+  children?: ViewsType;
+  props?: ObjectAny;
+};
+type ViewsType = {
+  [name: string | symbol]: ViewsItemType;
+};
 
 interface BaseMetaInterface {
   [enhancer]: Enhancer[];
   [wrapper]: Wrapper[];
   [transition]: Partial<TransitionProps>;
-  [keepalive]: Partial<KeepaliveProps>;
+  [keepalive]: Partial<Omit<KeepaliveProps, "max">>;
   [guardError]: (error: any) => void;
 }
+
+export type GlobalOptionsType = Partial<BaseMetaInterface> & { [start]?: ReactNode; [max]?: number } & ObjectAny;
+export type MetaInterface =
+  Partial<BaseMetaInterface>
+  & { [store]?: StoreInterface; [redirect]?: string; [alias]?: AliasType; [global]?: GlobalOptionsType; [views]?: ViewsType; }
+  & ObjectAny;
 
 export type Action = ReducerAction | ComposeAction;
 export type ReducerAction = ObjectAny & { type: string | undefined };
@@ -127,12 +224,7 @@ declare class ReducerHandle {
   failAction?: (error: any) => Action;
 }
 
-export type MetaInterface =
-  Partial<BaseMetaInterface>
-  & { [store]?: StoreInterface; [redirect]?: Partial<RedirectType>; [alias]?: AliasType; }
-  & ObjectAny;
-export type GlobalOptionsType = Partial<BaseMetaInterface> & { [start]?: ReactNode; [max]?: number } & ObjectAny;
-export type Route = RouteObject & {
+export type Route = Omit<RouteObject, "Component" | "lazy"> & {
   meta?: MetaInterface;
   component?: ComponentType | ComponentWithStore;
   children?: Route[];
@@ -148,25 +240,25 @@ type DeleteBeforeEachHandle = () => BeforeEachHandle;
 type DeleteAfterEachHandle = () => AfterEachHandle;
 export type WrapperStore<S = ObjectAny> = { state: S; detail: ObjectAny; options: ObjectAny };
 export type SetStore<S = ObjectAny> = (state: S, detail?: ObjectAny, options?: ObjectAny) => S | undefined;
-export type ReducerDispatch = (action: ReducerAction) => any;
-export type ComposeDispatch = (action: ComposeAction) => any;
+export type ReducerDispatch = (action: ReducerAction) => ReducerAction | Promise<ReducerAction>;
+export type ComposeDispatch = (action: ComposeAction) => ComposeAction | Promise<ComposeAction>;
+export type ReducersObject = { [key: string]: SyncReducerHandle | ReducerHandle; };
 
 export interface Router {
   RouterProvider: ComponentType<Omit<RouterProviderProps, "router"> & { router: Router }>;
-  useRoutes: Route[];
-  useGlobalOptions: GlobalOptionsType;
   useRouteMeta: MetaInterface;
   useNavigateGuard: () => boolean;
   useRouterStore: () => StoreInterface;
   useRouterStoreState: () => [WrapperStore, SetStore];
-  useRouterStoreReducer: (reducers?: ObjectAny) => [WrapperStore, ReducerDispatch];
+  useRouterStoreReducer: (reducers?: ReducersObject | ((store: StoreInterface) => ReducersObject)) => [WrapperStore, ReducerDispatch];
   useRouterStoreCompose: () => [WrapperStore, ComposeDispatch];
+  readonly routes: Route[];
+  readonly originRouter: RemixRouter;
   globalOptions: GlobalOptionsType;
   beforeEach: (handle: BeforeEachHandle) => DeleteBeforeEachHandle;
   afterEach: (handle: AfterEachHandle) => DeleteAfterEachHandle;
-  getRoutes: Route[];
   addRoutes: (newRoutes: Route[]) => Promise<NavigateFunction | undefined>;
-  hasRoute: (locationArg: Partial<Location> | string, basename?: string) => boolean;
+  hasRoute: (locationArg: Location | string, basename?: string) => boolean;
 }
 
 type Options = { basename?: string };
@@ -194,26 +286,27 @@ type EffectType = (store: WrapperStore, dispatch?: ComposeDispatch) => [any[], E
 
 export declare function makeEffect(effect: EffectType): void;
 
-type DepsHandle = (data: WrapperStore) => any[];
-type MemoHandleType = (newValue, oldValue) => any;
+type DepsHandle = (store: WrapperStore) => any[];
 
-export declare function makeMemo(depsHandle: DepsHandle, computeHandle: MemoHandleType, isFactory?: boolean): { value: any };
+export declare function makeMemo(depsHandle: DepsHandle, computedHandle: (newValue: any[], oldValue?: any[]) => any): { value: any };
 
-export declare function makeCallback(depsHandle: DepsHandle, functor: MemoHandleType): { value: () => any };
+export declare function makeCallback(depsHandle: DepsHandle, functor: (...args: any[]) => any): { value: (...args: any[]) => any };
 
-export declare function useRouterStore(): [WrapperStore, SetStore | ReducerDispatch | ComposeDispatch];
+export declare function useRouterStore(): [WrapperStore, SetStore | ReducerDispatch | ComposeDispatch] | undefined;
 
 export declare function useRouterHooks(): ObjectAny;
 
-export declare function routerNative(component: ComponentType, useRouterNativeHooksHandle?: () => ObjectAny): ComponentType;
+type UseRouterHooksHandleType = (router: Router) => ObjectAny;
 
-export declare function routerStore(component: ComponentType, useRouterHooksHandle?: () => ObjectAny): ComponentType;
+export declare function routerNative(component: ComponentType, useRouterHooksHandle?: UseRouterHooksHandleType): ComponentType;
 
-export declare function routerStoreState(component: ComponentType, useRouterHooksHandle?: () => ObjectAny): ComponentType;
+export declare function routerStore(component: ComponentType, useRouterHooksHandle?: UseRouterHooksHandleType): ComponentType;
 
-export declare function routerStoreReducer(component: ComponentType, reducers?: ObjectAny, useRouterHooksHandle?: () => ObjectAny): ComponentType;
+export declare function routerStoreState(component: ComponentType, useRouterHooksHandle?: UseRouterHooksHandleType): ComponentType;
 
-export declare function routerStoreCompose(component: ComponentType, useRouterHooksHandle?: () => ObjectAny): ComponentType;
+export declare function routerStoreReducer(component: ComponentType, reducers?: ObjectAny, useRouterHooksHandle?: UseRouterHooksHandleType): ComponentType;
+
+export declare function routerStoreCompose(component: ComponentType, useRouterHooksHandle?: UseRouterHooksHandleType): ComponentType;
 
 type ActionType = ObjectAny & {
   type: keyof ReducersType;

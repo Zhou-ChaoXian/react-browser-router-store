@@ -1,6 +1,7 @@
 "use strict";
 
-export {default as Transition} from "./transition.js";
+export {Transition, ViewTransition, useViewTransition} from "./transition.js";
 export {Keepalive, noCache, useActivated} from "./keepalive.js";
-export {default as Redirect} from "./redirect.js";
-export {Show, ShowOrder, ShowList, Resolve, TimeoutError} from "./show.js";
+export {Show, Await, defineAsyncComponent, useAsyncValue, ShowOrder, ShowList, Resolve, TimeoutError} from "./show.js";
+export {Outlet, useOutlet, useOutletContext} from "./outlet.js";
+export {RouteView} from "./routeView.js";

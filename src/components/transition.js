@@ -23,7 +23,7 @@
  *     <div>
  *       <button onClick={() => setKey("foo")}><h1>foo</h1></button>
  *       <button onClick={() => setKey("bar")}><h1>bar</h1></button>
- *       <Transition type="transition" uniqueKey={key} disabled={false}>
+ *       <Transition type="transition" uniqueKey={key}>
  *         {elements[key]}
  *       </Transition>
  *     </div>
@@ -31,25 +31,29 @@
  * }
  */
 
-import {createElement, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {createElement, useLayoutEffect, useMemo, useRef, useState, createContext, useContext} from "react";
+import {isForwardRefComponent, cloneElementWithRef} from "./utils.js";
 
 export {
-  Transition as default,
+  Transition,
+  ViewTransition,
+  useViewTransition,
 };
 
 /**
- * @param type {"transition" | "animation"}
+ * @param type {"transition" | "animation" | "animate" | undefined}
  * @param name {string}
- * @param uniqueKey {string | any}
- * @param disabled {boolean}
+ * @param uniqueKey {any}
  * @param __className {string}
- * @param style {React.CSSProperties}
+ * @param style {Omit<React.CSSProperties, "visibility">}
  * @param enterFromClass {string}
  * @param enterActiveClass {string}
  * @param enterToClass {string}
  * @param leaveFromClass {string}
  * @param leaveActiveClass {string}
  * @param leaveToClass {string}
+ * @param onEnter {(el: HTMLElement) => void}
+ * @param onLeave {(el: HTMLElement, done: () => void) => void}
  * @param children {React.ReactNode}
  * @return {React.ReactElement}
  */
@@ -58,7 +62,6 @@ function Transition(
     type,
     name = "v",
     uniqueKey,
-    disabled = true,
     className: __className,
     style = {height: "100%"},
     enterFromClass,
@@ -67,63 +70,91 @@ function Transition(
     leaveFromClass,
     leaveActiveClass,
     leaveToClass,
+    onEnter,
+    onLeave,
     children
   }
 ) {
+  const ref = useRef(null);
   const [el, setEl] = useState(children);
+  const reRender = useRef(false);
+  const first = useRef(true);
   const className = useMemo(() => ({
-    enterFromClass: enterFromClass ?? `${name}-enter-from`,
-    enterActiveClass: enterActiveClass ?? `${name}-enter-active`,
-    enterToClass: enterToClass ?? `${name}-enter-to`,
-    leaveFromClass: leaveFromClass ?? `${name}-leave-from`,
-    leaveActiveClass: leaveActiveClass ?? `${name}-leave-active`,
-    leaveToClass: leaveToClass ?? `${name}-leave-to`,
-  }), [uniqueKey, enterFromClass, enterActiveClass, enterToClass, leaveFromClass, leaveActiveClass, leaveToClass]);
-  const div = useRef();
-  const flag = useRef(false);
+    enterFromClass: (enterFromClass ?? `${name}-enter-from`).split(" ").filter(Boolean),
+    enterActiveClass: (enterActiveClass ?? `${name}-enter-active`).split(" ").filter(Boolean),
+    enterToClass: (enterToClass ?? `${name}-enter-to`).split(" ").filter(Boolean),
+    leaveFromClass: (leaveFromClass ?? `${name}-leave-from`).split(" ").filter(Boolean),
+    leaveActiveClass: (leaveActiveClass ?? `${name}-leave-active`).split(" ").filter(Boolean),
+    leaveToClass: (leaveToClass ?? `${name}-leave-to`).split(" ").filter(Boolean),
+  }), [uniqueKey]);
   useLayoutEffect(() => {
-    if (disabled) {
-      if (!flag.current) {
-        flag.current = true;
+    let flag = true;
+    const root = ref.current;
+    const handle = () => {
+      if (flag) {
+        setEl(children);
+        reRender.current = true;
       }
-      setEl(children);
-      return;
-    }
-    const isFinished = {current: true};
+    };
     switch (type) {
       case "transition": {
-        if (!flag.current) {
-          flag.current = true;
-          firstTransitionFrame(div.current, className, isFinished);
+        if (first.current) {
+          first.current = false;
+          transitionEnter(root, className);
         } else {
-          noFirstTransitionFrame(div.current, className, isFinished, () => setEl(children));
+          transitionLeave(root, className, handle);
         }
         return;
       }
       case "animation": {
-        if (!flag.current) {
-          flag.current = true;
-          firstAnimationFrame(div.current, className, isFinished);
+        if (first.current) {
+          first.current = false;
+          animationEnter(root, className);
         } else {
-          noFirstAnimationFrame(div.current, className, isFinished, () => setEl(children));
+          animationLeave(root, className, handle);
+        }
+        return;
+      }
+      case "animate": {
+        if (first.current) {
+          first.current = false;
+          animateEnter(root, onEnter);
+        } else {
+          animateLeave(root, onLeave, handle);
         }
         return;
       }
       default: {
-        if (!flag.current) {
-          flag.current = true;
-        }
+        if (first.current) first.current = false;
         setEl(children);
       }
     }
     return () => {
-      isFinished.current = true;
+      flag = false;
     };
   }, [uniqueKey]);
-  return createElement(
-    "div",
-    {ref: div, className: __className, style, children: el, "data-type": "Transition"}
-  );
+  useLayoutEffect(() => {
+    if (!reRender.current) return;
+    reRender.current = false;
+    const root = ref.current;
+    switch (type) {
+      case "transition": {
+        transitionEnter(root, className);
+        return;
+      }
+      case "animation": {
+        animationEnter(root, className);
+        return;
+      }
+      case "animate": {
+        animateEnter(root, onEnter);
+        return;
+      }
+    }
+  });
+  return isForwardRefComponent(el) ?
+    cloneElementWithRef(el, ref) :
+    createElement("div", {ref, className: __className, style, children: el, "data-type": "Transition"});
 }
 
 function animationFrame(handle) {
@@ -134,65 +165,181 @@ function animationFrame(handle) {
   });
 }
 
-function firstTransitionFrame(root, className, isFinished) {
-  if (!isFinished.current) return;
-  isFinished.current = false;
-  const {enterFromClass, enterActiveClass, enterToClass} = className;
-  root.classList.add(enterFromClass, enterActiveClass);
+function calcTransitionTime(el) {
+  const {transitionDuration, transitionDelay} = getComputedStyle(el);
+  const duration = parseFloat(transitionDuration) * 1000;
+  const delay = parseFloat(transitionDelay) * 1000;
+  return duration + delay;
+}
+
+function enterStyle(root) {
+  root.style.visibility = "";
+}
+
+function leaveStyle(root) {
+  root.style.visibility = "hidden";
+}
+
+function transitionEnter(root, className) {
+  enterStyle(root);
+  const {enterFromClass, enterActiveClass, enterToClass, leaveToClass} = className;
+  root.classList.remove(...leaveToClass);
+  root.classList.add(...enterFromClass, ...enterActiveClass);
   animationFrame(() => {
-    root.classList.remove(enterFromClass);
-    root.classList.add(enterToClass);
-    root.addEventListener("transitionend", function () {
-      root.classList.remove(enterActiveClass);
-      isFinished.current = true;
+    root.classList.remove(...enterFromClass);
+    root.classList.add(...enterToClass);
+    root.addEventListener("transitionend", () => {
+      root.classList.remove(...enterActiveClass);
     }, {once: true});
   });
 }
 
-function noFirstTransitionFrame(root, className, isFinished, handle) {
-  if (!isFinished.current) return;
-  isFinished.current = false;
+function transitionLeave(root, className, handle) {
   const {enterToClass, leaveFromClass, leaveActiveClass, leaveToClass} = className;
-  root.classList.remove(enterToClass);
-  root.classList.add(leaveFromClass, leaveActiveClass);
+  root.classList.remove(...enterToClass);
+  root.classList.add(...leaveFromClass, ...leaveActiveClass);
   animationFrame(() => {
-    root.classList.remove(leaveFromClass);
-    root.classList.add(leaveToClass);
-    root.addEventListener("transitionend", function () {
-      root.classList.remove(leaveActiveClass, leaveToClass);
-      if (isFinished.current) return;
+    root.classList.remove(...leaveFromClass);
+    root.classList.add(...leaveToClass);
+    let flag = false;
+    const fn = () => {
+      if (flag) return;
+      flag = true;
       handle();
-      isFinished.current = true;
-      firstTransitionFrame(root, className, isFinished);
-    }, {once: true});
+      leaveStyle(root);
+      root.classList.remove(...leaveActiveClass);
+    };
+    root.addEventListener("transitionend", fn, {once: true});
+    setTimeout(fn, calcTransitionTime(root));
   });
 }
 
-function firstAnimationFrame(root, className, isFinished) {
-  if (!isFinished.current) return;
-  isFinished.current = false;
+function animationEnter(root, className) {
+  enterStyle(root);
   const {enterActiveClass} = className;
-  root.style.display = "";
-  root.classList.add(enterActiveClass);
+  root.classList.add(...enterActiveClass);
   root.addEventListener("animationend", function () {
-    root.classList.remove(enterActiveClass);
-    isFinished.current = true;
+    root.classList.remove(...enterActiveClass);
   }, {once: true});
 }
 
-function noFirstAnimationFrame(root, className, isFinished, handle) {
-  if (!isFinished.current) return;
-  isFinished.current = false;
+function animationLeave(root, className, handle) {
   const {leaveActiveClass} = className;
-  root.classList.add(leaveActiveClass);
-  root.addEventListener("animationend", function () {
-    root.style.display = "none";
-    root.classList.remove(leaveActiveClass);
-    if (isFinished.current) return;
+  root.classList.add(...leaveActiveClass);
+  root.addEventListener("animationend", () => {
+    leaveStyle(root);
+    root.classList.remove(...leaveActiveClass);
     handle();
-    isFinished.current = true;
-    animationFrame(() => {
-      firstAnimationFrame(root, className, isFinished);
-    });
   }, {once: true});
+}
+
+function animateEnter(root, onEnter) {
+  enterStyle(root);
+  onEnter(root);
+}
+
+function animateLeave(root, onLeave, handle) {
+  onLeave(root, () => {
+    leaveStyle(root);
+    handle();
+  });
+}
+
+const Context = createContext("");
+
+/**
+ * @typedef {{
+ *   finished: Promise<void>;
+ *   ready: Promise<void>;
+ *   updateCallbackDone: Promise<void>;
+ *   skipTransition(): void;
+ * }} ViewTransitionInterface
+ * @typedef {(cb?: () => Promise<void> | void) => ViewTransitionInterface} StartViewTransition
+ */
+
+/**
+ * @param name {string}
+ * @param uniqueKey {any}
+ * @param onViewTransition {(el: HTMLElement, startViewTransition: StartViewTransition) => void}
+ * @param className {string}
+ * @param style {Omit<React.CSSProperties, "visibility">}
+ * @param children {React.ReactNode}
+ * @return {React.ReactElement}
+ */
+function ViewTransition(
+  {
+    name,
+    uniqueKey,
+    onViewTransition,
+    className,
+    style = {height: "100%"},
+    children
+  }
+) {
+  const ref = useRef(null);
+  const [el, setEl] = useState(children);
+  const first = useRef(true);
+  const viewTransitionResolve = useRef(null);
+  useLayoutEffect(() => {
+    let flag = true;
+    if (document.startViewTransition === undefined) {
+      if (first.current) first.current = false;
+      setEl(children);
+    } else {
+      const root = ref.current;
+      if (first.current) {
+        first.current = false;
+        onViewTransition(root, (cb) => {
+          leaveStyle(root);
+          root.style.viewTransitionName = name;
+          const view = document.startViewTransition(() => {
+            const fn = () => {
+              enterStyle(root);
+            };
+            return Promise.resolve(cb?.()).then(fn, fn);
+          });
+          view.finished.then(() => root.style.viewTransitionName = "");
+          return view;
+        });
+      } else {
+        onViewTransition(root, (cb) => {
+          root.style.viewTransitionName = name;
+          const view = document.startViewTransition(() => {
+            const fn = () => {
+              if (flag) {
+                setEl(children);
+                return new Promise(resolve => viewTransitionResolve.current = resolve);
+              }
+            };
+            return Promise.resolve(cb?.()).then(fn, fn);
+          });
+          view.finished.then(() => {
+            root.style.viewTransitionName = "";
+            if (ref.current !== root)
+              ref.current.style.viewTransitionName = "";
+          });
+          return view;
+        });
+      }
+    }
+    return () => {
+      flag = false;
+    };
+  }, [uniqueKey]);
+  useLayoutEffect(() => {
+    if (viewTransitionResolve.current !== null) {
+      viewTransitionResolve.current?.();
+      viewTransitionResolve.current = null;
+    }
+  });
+  return isForwardRefComponent(el) ?
+    createElement(Context.Provider, {value: name}, cloneElementWithRef(el, ref)) :
+    createElement("div", {ref, className, style, children: el, "data-type": "ViewTransition"});
+}
+
+function useViewTransition(ref) {
+  const name = useContext(Context);
+  useLayoutEffect(() => {
+    ref.current.style.viewTransitionName = name;
+  }, [name]);
 }

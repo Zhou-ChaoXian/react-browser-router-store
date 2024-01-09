@@ -23,12 +23,14 @@ import {
   createElement,
   useLayoutEffect,
   useRef,
+  useCallback,
   createContext,
   useContext,
-  cloneElement,
   isValidElement,
   Fragment,
 } from "react";
+import {OutletContext} from "./outlet.js";
+import {isForwardRefComponent, cloneElementWithRef} from "./utils.js";
 
 export {
   Keepalive,
@@ -43,6 +45,7 @@ const Context = createContext(false);
  * @param max {number}
  * @param include {(key: string | undefined) => boolean}
  * @param exclude {(key: string | undefined) => boolean}
+ * @param className {string}
  * @param style {Omit<React.CSSProperties, "display">}
  * @param children {React.ReactNode}
  * @return {React.ReactElement[]}
@@ -53,54 +56,73 @@ function Keepalive(
     max = 10,
     include = noCache,
     exclude = noCache,
+    className,
     style = {height: "100%"},
     children
   }
 ) {
-  const sortedKeysList = useRef(new List()).current;
+  const {valid} = useContext(OutletContext);
+  const originKeysOrder = useRef(new List()).current;
+  const sortedKeysOrder = useRef(new List()).current;
   const map = useRef(new Map()).current;
   const activeKey = useRef(uniqueKey);
   const isCache = useRef(true);
+  const roots = useRef([]).current;
+  const setRootsStyle = useCallback(() => {
+    if (roots.length === 0) return;
+    roots.forEach(({root, isActive}) => {
+      root.style.display = isActive ? "" : "none";
+    });
+    roots.length = 0;
+  }, []);
+  useLayoutEffect(() => {
+    setRootsStyle();
+  }, [uniqueKey]);
   if (!isCache.current) {
-    const {node} = map.get(activeKey.current);
+    const {originNode, sortedNode} = map.get(activeKey.current);
     map.delete(activeKey.current);
-    sortedKeysList.deleteItem(node);
+    originKeysOrder.deleteNode(originNode);
+    sortedKeysOrder.deleteNode(sortedNode);
     isCache.current = true;
   }
   if (map.has(uniqueKey)) {
     const data = map.get(uniqueKey);
-    data.element = cloneElement(data.element);
     data.isActive = true;
-    sortedKeysList.pushLast(data.node);
+    sortedKeysOrder.pushLast(data.sortedNode);
   } else {
-    const node = sortedKeysList.addItem(uniqueKey);
+    const originNode = originKeysOrder.addNode(uniqueKey);
+    const sortedNode = sortedKeysOrder.addNode(uniqueKey);
     const element = isValidElement(children) ? children : createElement(Fragment, null, children);
-    map.set(uniqueKey, {element, isActive: true, node});
-    if (max > 0 && sortedKeysList.length > max) {
-      for (const i of sortedKeysList.iteratorCount(sortedKeysList.length - max)) {
-        sortedKeysList.deleteItem(i);
-        map.delete(i.item);
-      }
+    map.set(uniqueKey, {element, isActive: true, originNode, sortedNode});
+    if (max > 0 && sortedKeysOrder.length > max) {
+      const {item} = sortedKeysOrder.deleteFirst();
+      originKeysOrder.deleteNode(map.get(item).originNode);
+      map.delete(item);
     }
   }
   if (uniqueKey !== activeKey.current) {
     const data = map.get(activeKey.current);
-    if (data) {
-      data.element = cloneElement(data.element);
-      data.isActive = false;
-    }
+    if (data) data.isActive = false;
   }
   activeKey.current = uniqueKey;
   if (!include(uniqueKey) || exclude(uniqueKey)) {
     isCache.current = false;
   }
-  return [...sortedKeysList].map(({item: key}) => {
+  return [...originKeysOrder].map(({item: key}) => {
     const {element, isActive} = map.get(key);
-    return createElement(
-      "div",
-      {key, style: {...style, display: isActive ? undefined : "none"}, "data-type": "Keepalive"},
-      createElement(Context.Provider, {value: isActive}, element)
-    );
+    let el;
+    if (isForwardRefComponent(element)) {
+      el = cloneElementWithRef(element, (root) => {
+        root && roots.push({root, isActive});
+      });
+    } else {
+      el = createElement("div", {
+        className,
+        style: {...style, display: isActive ? "" : "none"},
+        "data-type": "KeepaliveItem"
+      }, element);
+    }
+    return createElement(Context.Provider, {value: isActive && valid, key}, el);
   });
 }
 
@@ -141,7 +163,7 @@ class List {
     return {item, before: null, after: null};
   }
 
-  addItem(item) {
+  addNode(item) {
     const node = this.#createNode(item);
     if (!this.#first) {
       this.#first = node;
@@ -159,30 +181,35 @@ class List {
     return node;
   }
 
-  deleteItem(node) {
-    if (this.#length === 0) return;
+  deleteNode(node) {
+    if (this.#length === 0) return node;
     this.#length -= 1;
     if (this.#length === 0) {
       this.#first = null;
-      return;
+      return node;
     }
     if (node === this.#first) {
       this.#first = this.#first.after;
       this.#first.before = null;
       if (this.#length === 1)
         this.#last = null;
-      return;
+      return node;
     }
     if (node === this.#last) {
       this.#last = this.#last.before;
       this.#last.after = null;
       if (this.#length === 1)
         this.#last = null;
-      return;
+      return node;
     }
     const {before, after} = node;
     before.after = after;
     after.before = before;
+    return node;
+  }
+
+  deleteFirst() {
+    return this.deleteNode(this.#first);
   }
 
   get length() {
@@ -212,16 +239,6 @@ class List {
     node.before = this.#last;
     node.after = null;
     this.#last = node;
-  }
-
-  * iteratorCount(count) {
-    const c = count > this.#length ? this.#length : count;
-    let i = 0;
-    let node = this.#first;
-    while (i < c) {
-      yield node;
-      node = node.after;
-      i += 1;
-    }
+    return node;
   }
 }

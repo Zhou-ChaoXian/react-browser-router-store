@@ -58,14 +58,6 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
   const navigateGuard = {current: {pathname: "", active: false}, subscribes: []};
   let router = factory(baseRoutes, options);
 
-  function useRoutes() {
-    return baseRoutes;
-  }
-
-  function useGlobalOptions() {
-    return globalOptions;
-  }
-
   function useRouteMeta() {
     return useRef(useContext(RouteContext).meta).current;
   }
@@ -139,14 +131,15 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
       return action;
     }, [dispatch]);
     const oldDepsWithDispose = useRef(null);
+    const effects = useRef(null), recover = useRef(null);
     useEffect(() => () => {
-      if (oldDepsWithDispose.current) {
-        oldDepsWithDispose.current.forEach(([_, dispose]) => dispose && dispose());
-      }
+      oldDepsWithDispose.current?.forEach(([_, dispose]) => typeof dispose === "function" && dispose());
+      recover.current?.();
     }, []);
-    const effects = getEffects(store);
-    if (effects.length === 0) return;
-    const newDepsWithHandle = effects.map(effect => effect(wrapperStore, wrapperDispatch));
+    if (effects.current === null)
+      [effects.current, recover.current] = getEffects(store);
+    if (effects.current.length === 0) return;
+    const newDepsWithHandle = effects.current.map(effect => effect(wrapperStore, wrapperDispatch));
     if (oldDepsWithDispose.current === null) {
       oldDepsWithDispose.current = newDepsWithHandle.map(([deps, handle]) => [deps, handle(deps)]);
     } else {
@@ -154,9 +147,10 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
         if (oldDeps.length === 0) return;
         const [deps, handle] = newDepsWithHandle[index];
         if (oldDeps.some((item, i) => item !== deps[i])) {
-          dispose && dispose();
-          oldDepsWithDispose.current[index][0] = deps;
-          oldDepsWithDispose.current[index][1] = handle(deps, oldDeps);
+          if (typeof dispose === "function") dispose();
+          const oldCurrent = oldDepsWithDispose.current[index];
+          oldCurrent[0] = deps;
+          oldCurrent[1] = handle(deps, oldDeps);
         }
       });
     }
@@ -181,11 +175,13 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
   let listener = null;
   let addRoutesResolve = null;
 
+  function setListener(onStoreChange) {
+    listener = onStoreChange;
+    return () => listener = null;
+  }
+
   function RouterProvider({router: __router, fallbackElement, future}) {
-    const realRouter = useSyncExternalStore(onStoreChange => {
-      listener = onStoreChange;
-      return () => listener = null;
-    }, () => router);
+    const realRouter = useSyncExternalStore(setListener, () => router);
     useEffect(() => {
       if (addRoutesResolve === null) return;
       addRoutesResolve(realRouter.navigate);
@@ -216,8 +212,6 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
 
   return {
     RouterProvider,
-    useRoutes,
-    useGlobalOptions,
     useRouteMeta,
     useNavigateGuard,
     useRouterStore,
@@ -225,20 +219,23 @@ function baseCreateBrowserRouter(routes, options = undefined, globalOptions = {}
     useRouterStoreReducer,
     useRouterStoreCompose,
     globalOptions,
+    get routes() {
+      return baseRoutes;
+    },
+    get originRouter() {
+      return router;
+    },
     beforeEach: (handle) => {
       return add(beforeHandles, handle);
     },
     afterEach: (handle) => {
       return add(afterHandles, handle);
     },
-    getRoutes: () => {
-      return router.routes;
-    },
-    addRoutes: (newRoutes = baseRoutes) => {
+    addRoutes: (newRoutes) => {
       return new Promise(resolve => {
-        if (newRoutes === baseRoutes) return resolve();
         baseRoutes = newRoutes;
         handleRoutes(baseRoutes, globalOptions);
+        router.dispose();
         router = factory(baseRoutes, options);
         listener?.();
         addRoutesResolve = resolve;

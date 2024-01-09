@@ -30,10 +30,26 @@
  * }
  */
 
-import {createElement, Suspense, Component, Fragment, useEffect, useLayoutEffect} from "react";
+import {
+  createElement,
+  Suspense,
+  Component,
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useRef,
+  createContext,
+  useContext,
+  useCallback,
+  isValidElement
+} from "react";
 
 export {
   Show,
+  Await,
+  defineAsyncComponent,
+  useAsyncValue,
   ShowOrder,
   ShowList,
   Resolve,
@@ -45,11 +61,13 @@ const NotResult = Symbol();
 const _tracked = Symbol();
 const _data = Symbol();
 const _error = Symbol();
+const defaultFunction = (_ => _);
+const Context = createContext(undefined);
 
 /**
  * @param resolve {Promise | any}
  * @param loading {React.ReactNode}
- * @param error {React.ReactNode | ((error: any) => React.ReactNode)}
+ * @param error {(error: any) => React.ReactNode}
  * @param onStart {() => any}
  * @param onEnd {() => any}
  * @param children {(value: any) => React.ReactNode}
@@ -58,10 +76,147 @@ const _error = Symbol();
 function Show({resolve, loading = false, error = (_) => false, onStart, onEnd, children}) {
   useLayoutEffect(() => {
     onStart?.();
-  });
+  }, [resolve]);
   return createElement(ErrorBoundary, {fallback: error},
-    createElement(Suspense, {fallback: loading}, createElement(ResolveInner, {resolve, children, onEnd}))
+    createElement(Suspense, {fallback: loading},
+      createElement(ResolveInner, {resolve, children, onEnd})
+    )
   );
+}
+
+/**
+ * @param loading {React.ReactNode}
+ * @param error {(error: any) => React.ReactNode}
+ * @param complete {boolean}
+ * @param onStart {() => void}
+ * @param onEnd {() => void}
+ * @param delay {number}
+ * @param children {React.FunctionComponentElement<any>}
+ * @param compare {(newProps: any, oldProps: any) => boolean}
+ * @return {React.ReactElement}
+ */
+function Await(
+  {
+    loading,
+    error,
+    complete = false,
+    onStart,
+    onEnd,
+    delay = 300,
+    children,
+    compare = defaultCompare
+  }
+) {
+  const [resolve, setResolve] = useState(() => {
+    return isValidElement(children) && typeof children.type === "function" ?
+      {current: children.type(children.props)} :
+      undefined;
+  });
+  const flag = useRef(true), first = useRef(true);
+  const cacheProps = useRef(null);
+  if (!isValidElement(children) || typeof children.type !== "function")
+    return createElement(Show, {resolve: children, children: defaultFunction});
+  const handle = () => children.type(children.props);
+  useAwaitCompareProps(compare, flag, complete, cacheProps, children.props, resolve, handle, delay);
+  useAwaitLayoutEffect(first, flag, onStart, onEnd, setResolve, handle);
+  const props = {resolve: resolve.current, loading, error, children: defaultFunction};
+  useAwaitSetProps(first, complete, props, onStart, onEnd);
+  return createElement(Show, props);
+}
+
+/**
+ * @param name {string}
+ * @param loader {(props: any) => Promise<any> | any}
+ * @param Component {React.ComponentType}
+ * @param complete {boolean}
+ * @param loading {React.ReactNode}
+ * @param error {(error: any) => React.ReactNode}
+ * @param delay {number}
+ * @param compare {(newProps: any, oldProps: any) => boolean}
+ * @return {function(*): React.FunctionComponentElement}
+ */
+function defineAsyncComponent(
+  {
+    name = "AsyncComponent",
+    loader,
+    Component,
+    complete = false,
+    loading,
+    error,
+    delay = 300,
+    compare = defaultCompare,
+  }
+) {
+  function AsyncComponent({onStart, onEnd, ...props}) {
+    const handle = () => loader(props);
+    const [resolve, setResolve] = useState(() => ({current: handle()}));
+    const cacheProps = useRef(null);
+    const flag = useRef(true), first = useRef(true);
+    const el = useState(() => ({current: createElement(Component, props)}))[0];
+    const fn = useCallback((value) => createElement(Context.Provider, {value}, el.current), []);
+    const defineHandle = () => el.current = createElement(Component, props);
+    useAwaitCompareProps(compare, flag, complete, cacheProps, props, resolve, handle, delay, defineHandle);
+    useAwaitLayoutEffect(first, flag, onStart, onEnd, setResolve, handle, defineHandle);
+    const __props = {resolve: resolve.current, loading, error, children: fn};
+    useAwaitSetProps(first, complete, __props, onStart, onEnd);
+    return createElement(Show, __props);
+  }
+
+  return Object.defineProperty(AsyncComponent, "displayName", {value: name});
+}
+
+function useAsyncValue() {
+  return useContext(Context);
+}
+
+function defaultCompare(newProps, oldProps) {
+  return Object.entries(newProps).some(([key, value]) => value !== oldProps[key]);
+}
+
+function useAwaitCompareProps(compare, flag, complete, cacheProps, newProps, resolve, handle, delay, defineHandle) {
+  const oldProps = cacheProps.current;
+  if (oldProps === null) {
+    cacheProps.current = newProps;
+  } else if (compare(newProps, oldProps)) {
+    cacheProps.current = newProps;
+    if (complete) {
+      flag.current = !flag.current;
+    } else {
+      let data = handle();
+      if (data instanceof Promise)
+        data = data.then(value => sleep(delay, value));
+      resolve.current = data;
+      defineHandle && defineHandle();
+    }
+  }
+}
+
+function useAwaitLayoutEffect(first, flag, onStart, onEnd, setResolve, handle, defineHandle) {
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    onStart?.();
+    let flag = true;
+    Promise.resolve(handle()).then(value => {
+      if (flag) {
+        setResolve({current: value});
+        defineHandle && defineHandle();
+        onEnd?.();
+      }
+    });
+    return () => {
+      flag = false;
+    };
+  }, [flag.current]);
+}
+
+function useAwaitSetProps(first, complete, props, onStart, onEnd) {
+  if (first.current || !complete) {
+    props.onStart = onStart;
+    props.onEnd = onEnd;
+  }
 }
 
 const modeStates = new Set(["forward", "backward", "together"]);
@@ -70,7 +225,7 @@ const modeStates = new Set(["forward", "backward", "together"]);
  * @param mode {"forward" | "backward" | "together" | undefined}
  * @param delay {number}
  * @param children {ReactNode | ReactElement<ShowProps> | (ReactNode | ReactElement<ShowProps>)[]}
- * @return {React.ReactElement}
+ * @return
  */
 function ShowOrder({mode, delay = 300, children}) {
   if (!modeStates.has(mode)) return children;
@@ -175,7 +330,7 @@ function ShowList({loading = false, timeout = 0, delay = 300, onStart, onEnd, ch
 
 /**
  * @param resolve {Promise | any}
- * @param error {React.ReactNode | ((error: any) => React.ReactNode)}
+ * @param error {(error: any) => React.ReactNode}
  * @param children {(value: any) => React.ReactNode}
  */
 function Resolve({resolve, error = (_) => false, children}) {
@@ -185,7 +340,7 @@ function ResolveInner({resolve, children, onEnd}) {
   const value = use(resolve);
   useEffect(() => {
     onEnd?.();
-  });
+  }, [resolve]);
   return children(value);
 }
 
@@ -242,10 +397,7 @@ class ErrorBoundary extends Component {
       return this.props.children;
     } else {
       this.state.error = null;
-      if (typeof this.props.fallback === "function") {
-        return this.props.fallback(error.message);
-      }
-      return this.props.fallback;
+      return this.props.fallback(error.message);
     }
   }
 }

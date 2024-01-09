@@ -1,14 +1,15 @@
 "use strict";
 
-import {createElement as h, useContext, useLayoutEffect, useRef, useState} from "react";
-import {useLocation, useNavigate, generatePath} from "react-router-dom";
-import {Context, RouteContext, defaultFunction} from "./context.js";
+import {createElement as h, useContext, useLayoutEffect, useRef, useState, isValidElement, Fragment} from "react";
+import {generatePath, useLocation, useNavigate} from "react-router-dom";
+import {Context, defaultFunction, RouteContext, RouteViewsContext} from "./context.js";
 import {ComponentWithStore, isLazyComponentWithStore, StoreState} from "./lazy.js";
-import {Transition, Keepalive, Redirect} from "../components";
+import {Transition, Keepalive} from "../components";
 import {compose, getRequestAfterHandles, getRequestBeforeHandles, getRequestErrorHandles} from "../store";
 
 export {
   handleRoutes,
+  global,
   enhancer,
   wrapper,
   transition,
@@ -19,8 +20,10 @@ export {
   redirect,
   alias,
   max,
+  views,
 };
 
+const global = Symbol("global");
 const enhancer = Symbol("enhancer");
 const wrapper = Symbol("wrapper");
 const transition = Symbol("transition");
@@ -33,35 +36,46 @@ const alias = Symbol("alias");
 const enhancerFactory = Symbol();
 const max = Symbol("max");
 const originPath = Symbol("originPath");
+const handled = Symbol();
+const elementNop = Symbol("elementNop");
+const routeRefNop = Symbol();
+const views = Symbol("views");
 
-function handleRoutes(routes, globalOptions) {
+function handleRoutes(routes, globalOptions, parentGlobalOptions = {}, hasIndex = true) {
   const extraRoutesHandles = [];
   routes.forEach(item => {
-    const meta = item.meta ?? {};
-    if (item.path !== undefined) {
-      if (meta[redirect]) {
-        handleRouteMetaRedirect(item);
+    if (item.index) hasIndex = true;
+    const flag = (item.path !== undefined || item.index) && item.meta?.[handled] === undefined;
+    if (flag) {
+      item.meta ??= {};
+      item.meta[handled] = true;
+      if (item.meta[redirect] !== undefined) {
+        item.element = h(Route, {route: h(Fragment)});
+        delete item.children;
+        return;
+      }
+      let element;
+      if (Reflect.has(item, "element")) {
+        element = isValidElement(item.element) ? item.element : h(Fragment, null, item.element);
+      } else if (item.component) {
+        element = handleRouteComponent(item);
       } else {
-        const wrapperList = meta[wrapper] ?? globalOptions[wrapper] ?? [];
-        let element;
-        if (item.element) {
-          element = item.element;
-        } else if (item.component) {
-          element = handleRouteComponent(item);
-        } else {
-          element = undefined;
-        }
-        item.element = h(Route, {route: composeComponent(wrapperList)(element)});
-        if (meta[alias]) {
-          handleRouteMetaAlias(item, extraRoutesHandles)
-        }
+        element = h(Fragment);
+      }
+      const wrapperList = item.meta[wrapper] ?? parentGlobalOptions[wrapper] ?? globalOptions[wrapper] ?? [];
+      item.element = h(Route, {route: composeComponent(wrapperList)(element)});
+      if (item.meta[alias]) {
+        handleRouteMetaAlias(item, extraRoutesHandles);
       }
     }
-    if ((item.children ?? []).length > 0) {
-      handleRoutes(item.children, globalOptions);
+    if ((item.children ?? []).length > 0 && item.meta?.[originPath] === undefined) {
+      handleRoutes(item.children, globalOptions, item[global], !flag);
     }
-  })
-  routes.push(...extraRoutesHandles.map(handle => handle()).flat());
+  });
+  if (!hasIndex)
+    routes.push({index: true, element: h(Route, {route: elementNop}), meta: {[handled]: true}});
+  if (extraRoutesHandles.length > 0)
+    routes.push(...extraRoutesHandles.map(handle => handle()).flat());
 }
 
 function composeComponent(componentWithPropsList) {
@@ -82,10 +96,8 @@ function handleRouteComponent(item) {
   const {component} = item;
   if (component instanceof ComponentWithStore) {
     element = h(component.component);
-    item.meta ??= {};
     item.meta[store] = component.store;
   } else if (isLazyComponentWithStore(component)) {
-    item.meta ??= {};
     const storeState =
       Reflect.get(component, "storeState") ??
       new StoreState(() => Reflect.get(component, "factory")().then(module => {
@@ -102,17 +114,6 @@ function handleRouteComponent(item) {
     element = h(component);
   }
   return element;
-}
-
-function handleRouteMetaRedirect(route) {
-  const redirectInfo = route.meta[redirect];
-  let path, options = {}, children;
-  if (typeof redirectInfo === "string") {
-    path = redirectInfo;
-  } else {
-    ({path, options, children} = redirectInfo);
-  }
-  route.element = h(Route, {route: h(Redirect, {path, options, children})})
 }
 
 function handleRouteMetaAlias(route, extraRoutesHandles) {
@@ -161,21 +162,47 @@ const navigateGuard = {
 };
 
 function Route({route}) {
-  const {handles: [before, after], router, globalOptions, handleNavigateGuard} = useContext(Context);
-  const matches = router.state.matches;
-  const match = matches[matches.findIndex(item => item.route.element.props.route === route)];
-  const {pathname, params} = match, {meta = {}} = match.route;
-  if (!meta[enhancerFactory]) {
-    meta[enhancerFactory] = compose(meta[enhancer] ?? globalOptions[enhancer] ?? []);
-    match.route.meta = meta;
-  }
-  const [element, setElement] = useState(() => globalOptions[start]);
-  const routeRef = useRef();
+  const {handles: [before, after], globalOptions, router, handleNavigateGuard} = useContext(Context);
+  const routeRef = useRef(routeRefNop);
   const to = useLocation(), from = useRef(to), fromPro = useRef(to);
-  to.pathname === pathname && (to.meta ??= meta);
   const navigate = useNavigate();
   const resolveValue = useRef();
+  const matches = router.state.matches;
+  const index = matches.findIndex(item => item.route.element.props.route === route);
+  const notFind = index < 0;
+  const match = matches[index];
+  const {pathname, params} = match ?? {};
+  const meta = match?.route.meta
+  let parentGlobalOptions = {};
+  if (index > 0) {
+    const __global = matches[index - 1].route.meta?.[global];
+    if (__global !== undefined)
+      parentGlobalOptions = __global;
+  }
+  const getValueFromGlobal = (key, defaultValue = undefined) => {
+    if (Reflect.has(parentGlobalOptions, key))
+      return parentGlobalOptions[key];
+    if (Reflect.has(globalOptions, key))
+      return globalOptions[key];
+    return defaultValue
+  };
+  const [element, setElement] = useState(() => {
+    return h(RouteContext.Provider, {value: {}},
+      h(RouteViewsContext.Provider, {value: {}},
+        h(Transition, getValueFromGlobal(transition, {}),
+          h(Keepalive, {uniqueKey: "start"}, getValueFromGlobal(start))
+        )
+      )
+    );
+  });
   useLayoutEffect(() => {
+    if (notFind) return;
+    if (Reflect.has(meta, redirect)) {
+      queueMicrotask(() => {
+        navigate({pathname: generatePath(meta[redirect], params), search: to.search, hash: to.hash}, {replace: true});
+      });
+      return;
+    }
     let flag = true;
     handleNavigateGuard(from.current.pathname, true);
     before.reduce(
@@ -226,14 +253,21 @@ function Route({route}) {
       const uniqueKey = pathname;
       const __originPath = meta[originPath];
       const keepAliveProps = {
-        ...(meta[keepalive] ?? globalOptions[keepalive] ?? {}),
-        max: globalOptions[max],
-        uniqueKey: __originPath === undefined ? uniqueKey : generatePath(__originPath, params)
+        ...(meta[keepalive] ?? getValueFromGlobal(keepalive, {})),
+        max: getValueFromGlobal(max),
+        uniqueKey: __originPath === undefined ? uniqueKey : generatePath(__originPath, params),
+        children: route === elementNop ?
+          undefined :
+          meta[enhancerFactory](() => route)({to, from: from.current, pathname}),
       };
-      const nextElement = h(RouteContext.Provider, {value: {pathname, store, meta}}, h(
-        Transition, {...(meta[transition] ?? globalOptions[transition] ?? {}), uniqueKey},
-        h(Keepalive, keepAliveProps, meta[enhancerFactory](() => route)({to, from: from.current, pathname}))
-      ));
+      const nextElement =
+        h(RouteContext.Provider, {value: {pathname, store, meta}},
+          h(RouteViewsContext.Provider, {value: meta[views]},
+            h(Transition, {...(meta[transition] ?? getValueFromGlobal(transition, {})), uniqueKey},
+              h(Keepalive, keepAliveProps)
+            )
+          )
+        );
       setElement(nextElement);
       from.current = to;
       routeRef.current = route;
@@ -254,10 +288,15 @@ function Route({route}) {
         (prev, current) => prev.then(v => Promise.resolve(current(to, from.current, v, pathname))),
         Promise.resolve(value)
       );
-    }).catch((meta[guardError] ?? globalOptions[guardError] ?? defaultFunction));
+    }).catch(meta[guardError] ?? getValueFromGlobal(guardError, defaultFunction));
     return () => {
       flag = false
     };
-  }, [to.pathname, to.search, to.hash, pathname]);
+  }, [pathname, route]);
+  if (notFind)
+    return element;
+  if (!meta[enhancerFactory])
+    meta[enhancerFactory] = compose(meta[enhancer] ?? getValueFromGlobal(enhancer, []));
+  to.pathname === pathname && (to.meta ??= meta);
   return element;
 }
